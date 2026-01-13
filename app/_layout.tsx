@@ -4,21 +4,30 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import { SettingsProvider } from '@/context/SettingsContext';
+import { AuthProvider } from '@/context/AuthContext';
+import { GamificationProvider } from '@/context/GamificationContext';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <AuthProvider>
+      <GamificationProvider>
+        <SettingsProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="timer" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="settings" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="login" options={{ animation: 'fade' }} />
+              <Stack.Screen name="register" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="profile" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+            </Stack>
+            <StatusBar style="light" />
+          </ThemeProvider>
+        </SettingsProvider>
+      </GamificationProvider>
+    </AuthProvider>
   );
 }
