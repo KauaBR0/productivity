@@ -1,14 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Vibration, FlatList, Alert, Modal } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Vibration, FlatList, Alert, Modal, Dimensions, AppState } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
+import * as Notifications from 'expo-notifications';
 import LottieView from 'lottie-react-native';
+import Svg, { Circle, G } from 'react-native-svg';
+import Animated, { useSharedValue, useAnimatedProps, withTiming, Easing } from 'react-native-reanimated';
 import { CYCLES, CycleDef } from '../constants/FocusConfig';
 import { useSettings } from '@/context/SettingsContext';
 import { useGamification } from '@/context/GamificationContext';
 import { X, Play, Pause, Gift, Brain, Coffee, Target, Plus, Clock } from 'lucide-react-native';
+
+const { width } = Dimensions.get('window');
+const CIRCLE_SIZE = width * 0.8;
+const STROKE_WIDTH = 15;
+const RADIUS = (CIRCLE_SIZE - STROKE_WIDTH) / 2;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type TimerPhase = 'focus' | 'selection' | 'reward' | 'rest';
 
@@ -284,11 +295,40 @@ export default function TimerScreen() {
   const [timeLeft, setTimeLeft] = useState(cycle ? cycle.focusDuration * 60 : 0);
   const [isActive, setIsActive] = useState(true);
   const [selectedReward, setSelectedReward] = useState<string | null>(null);
+  const [endTime, setEndTime] = useState<number | null>(
+    cycle ? Date.now() + cycle.focusDuration * 60 * 1000 : null
+  );
+  const scheduledNotificationIdRef = useRef<string | null>(null);
 
   // One More Feature State
   const [showOneMoreModal, setShowOneMoreModal] = useState(false);
+  const [showRewardEndModal, setShowRewardEndModal] = useState(false);
+  const [extensionTime, setExtensionTime] = useState(10); // Default extension time
   const [accumulatedFocusTime, setAccumulatedFocusTime] = useState(cycle ? cycle.focusDuration : 0);
   const [accumulatedRewardTime, setAccumulatedRewardTime] = useState(cycle ? cycle.rewardDuration : 0);
+  
+  // Animation State
+  const [totalDuration, setTotalDuration] = useState(cycle ? cycle.focusDuration * 60 : 1);
+  const progress = useSharedValue(1);
+
+  // Update Progress
+  useEffect(() => {
+      if (totalDuration > 0) {
+          progress.value = withTiming(timeLeft / totalDuration, {
+              duration: 1000,
+              easing: Easing.linear,
+          });
+      }
+  }, [timeLeft, totalDuration]);
+
+  const animatedCircleProps = useAnimatedProps(() => {
+      return {
+          strokeDashoffset: CIRCUMFERENCE * (1 - progress.value),
+      };
+  });
+
+  // Track start time
+  const [sessionStartTime, setSessionStartTime] = useState<number>(Date.now());
 
   // Focus Status Sync
   useEffect(() => {
@@ -328,28 +368,106 @@ export default function TimerScreen() {
     }
   };
 
-  // Timer Logic
+  const cancelScheduledNotification = useCallback(async () => {
+    if (scheduledNotificationIdRef.current) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(scheduledNotificationIdRef.current);
+      } catch (error) {
+        console.log('Failed to cancel scheduled notification', error);
+      } finally {
+        scheduledNotificationIdRef.current = null;
+      }
+    }
+  }, []);
+
+  const schedulePhaseEndNotification = useCallback(async (seconds: number) => {
+    const currentConfig = PHASE_CONFIG[phase];
+    let title = `${currentConfig.label} finalizado`;
+    let body = 'Hora de seguir para a próxima etapa.';
+
+    if (phase === 'focus') {
+      title = 'Tempo de foco acabou! 🚨';
+      body = 'Vamos escolher sua recompensa.';
+    } else if (phase === 'reward') {
+      title = 'Recompensa finalizada! ⏱️';
+      body = 'Hora de voltar para a rotina.';
+    } else if (phase === 'rest') {
+      title = 'Descanso finalizado! ✅';
+      body = 'Pronto para o próximo ciclo.';
+    }
+
+    try {
+      const id = await Notifications.scheduleNotificationAsync({
+        content: { title, body, sound: true },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds,
+          repeats: false,
+        },
+      });
+      scheduledNotificationIdRef.current = id;
+    } catch (error) {
+      console.log('Failed to schedule notification', error);
+    }
+  }, [phase]);
+
+  const updateTimeLeft = useCallback(() => {
+    if (!endTime) return;
+    const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+    setTimeLeft(remaining);
+  }, [endTime]);
+
+  // Timer Logic (wall-clock based so it keeps time across background / tab switches)
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
 
-    if (isActive && timeLeft > 0 && phase !== 'selection') {
+    if (isActive && endTime && phase !== 'selection') {
       interval = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
+        updateTimeLeft();
       }, 1000);
-    } else if (timeLeft === 0 && phase !== 'selection') {
-      // Prevent multiple calls if already handling phase end (e.g. if logic takes time)
-      // but useEffect dependency on timeLeft ensures this runs once when it hits 0.
-      handlePhaseEnd();
     }
 
     return () => {
       if (interval) clearInterval(interval);
     };
+  }, [isActive, endTime, phase, updateTimeLeft]);
+
+  // Schedule/cancel notification for phase end
+  useEffect(() => {
+    const syncNotification = async () => {
+      await cancelScheduledNotification();
+
+      if (!isActive || !endTime || phase === 'selection') return;
+      const seconds = Math.max(1, Math.ceil((endTime - Date.now()) / 1000));
+      await schedulePhaseEndNotification(seconds);
+    };
+
+    void syncNotification();
+  }, [isActive, endTime, phase, cancelScheduledNotification, schedulePhaseEndNotification]);
+
+  // Handle phase end when time reaches zero
+  useEffect(() => {
+    if (isActive && timeLeft === 0 && phase !== 'selection') {
+      handlePhaseEnd();
+    }
   }, [isActive, timeLeft, phase]);
+
+  // Sync on AppState changes (resume from background)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        updateTimeLeft();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [updateTimeLeft]);
 
   const handlePhaseEnd = () => {
     if (!isActive) return; // Prevent double trigger
     setIsActive(false);
+    setEndTime(null);
+    void cancelScheduledNotification();
 
     if (phase === 'focus') {
       playAlarm(); // Play custom alarm sound
@@ -358,9 +476,8 @@ export default function TimerScreen() {
     } else if (phase === 'reward') {
       playAlarm();
       Vibration.vibrate([0, 500, 200, 500]);
-      setPhase('rest');
-      setTimeLeft(cycle.restDuration * 60);
-      setIsActive(true); 
+      // Show manual stop modal instead of auto transition
+      setShowRewardEndModal(true);
     } else if (phase === 'rest') {
       playAlarm();
       Vibration.vibrate([0, 500, 200, 500]);
@@ -370,16 +487,34 @@ export default function TimerScreen() {
     }
   };
 
-  const handleFinishFocus = () => {
+  const handleFinishFocus = async () => {
     setShowOneMoreModal(false);
-    processCycleCompletion(accumulatedFocusTime); // AWARD XP with total accumulated time
+    const startedAt = Date.now() - accumulatedFocusTime * 60 * 1000;
+    processCycleCompletion(accumulatedFocusTime, startedAt, cycle.label); // AWARD XP with total accumulated time
     setPhase('selection');
+    setIsActive(false);
+    setEndTime(null);
+    await cancelScheduledNotification();
+  };
+
+  const handleStopReward = async () => {
+      setShowRewardEndModal(false);
+      setPhase('rest');
+      const restSeconds = cycle.restDuration * 60;
+      setTimeLeft(restSeconds);
+      setTotalDuration(restSeconds);
+      setEndTime(Date.now() + restSeconds * 1000);
+      setIsActive(true);
+      await cancelScheduledNotification();
   };
 
   const handleOneMore = (focusAdd: number, rewardAdd: number) => {
     setShowOneMoreModal(false);
     // Add minutes to focus
-    setTimeLeft(focusAdd * 60);
+    const newTime = focusAdd * 60;
+    setTimeLeft(newTime);
+    setTotalDuration(newTime);
+    setEndTime(Date.now() + newTime * 1000);
     // Update accumulators
     setAccumulatedFocusTime(prev => prev + focusAdd);
     setAccumulatedRewardTime(prev => prev + rewardAdd);
@@ -390,7 +525,10 @@ export default function TimerScreen() {
   const startReward = (reward: string) => {
     setSelectedReward(reward);
     setPhase('reward');
-    setTimeLeft(accumulatedRewardTime * 60); // Use accumulated reward time
+    const rewardTime = accumulatedRewardTime * 60;
+    setTimeLeft(rewardTime); // Use accumulated reward time
+    setTotalDuration(rewardTime);
+    setEndTime(Date.now() + rewardTime * 1000);
     setIsActive(true);
   };
 
@@ -400,15 +538,40 @@ export default function TimerScreen() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     Alert.alert(
       "Desistir?",
       "O progresso será perdido.",
       [
         { text: "Cancelar", style: "cancel" },
-        { text: "Sair", style: "destructive", onPress: () => router.back() }
+        { 
+            text: "Sair", 
+            style: "destructive", 
+            onPress: async () => {
+                await cancelScheduledNotification();
+                router.back();
+            } 
+        }
       ]
     );
+  };
+
+  const pauseTimer = () => {
+    if (!endTime) {
+      setIsActive(false);
+      return;
+    }
+    const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+    setTimeLeft(remaining);
+    setEndTime(null);
+    setIsActive(false);
+    void cancelScheduledNotification();
+  };
+
+  const resumeTimer = () => {
+    if (timeLeft <= 0) return;
+    setEndTime(Date.now() + timeLeft * 1000);
+    setIsActive(true);
   };
 
   if (!cycle) return null;
@@ -446,19 +609,65 @@ export default function TimerScreen() {
 
       {/* Main Timer */}
       <View style={styles.timerContainer}>
-        <Text style={[styles.timerText, { color: currentTheme.color }]}>
-          {formatTime(timeLeft)}
-        </Text>
-        <Text style={styles.instructionText}>
-          {isActive ? 'O tempo está passando...' : 'Pausado'}
-        </Text>
+        <Svg width={CIRCLE_SIZE} height={CIRCLE_SIZE} style={styles.timerSvg}>
+            {/* Background Circle */}
+            <Circle
+                cx={CIRCLE_SIZE / 2}
+                cy={CIRCLE_SIZE / 2}
+                r={RADIUS}
+                stroke="#1E1E24"
+                strokeWidth={STROKE_WIDTH}
+                fill="none"
+            />
+            {/* Animated Progress Circle (temporarily disabled for debugging) */}
+            {/* <AnimatedCircle
+                cx={CIRCLE_SIZE / 2}
+                cy={CIRCLE_SIZE / 2}
+                r={RADIUS}
+                stroke={currentTheme.color}
+                strokeWidth={STROKE_WIDTH}
+                fill="none"
+                strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
+                strokeLinecap="round"
+                animatedProps={animatedCircleProps}
+                rotation="-90"
+                origin={`${CIRCLE_SIZE / 2}, ${CIRCLE_SIZE / 2}`}
+            /> */}
+            <Circle
+                cx={CIRCLE_SIZE / 2}
+                cy={CIRCLE_SIZE / 2}
+                r={RADIUS}
+                stroke={currentTheme.color}
+                strokeWidth={STROKE_WIDTH}
+                fill="none"
+                strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
+                strokeLinecap="round"
+                rotation="-90"
+                origin={`${CIRCLE_SIZE / 2}, ${CIRCLE_SIZE / 2}`}
+            />
+        </Svg>
+        
+        <View style={styles.timerTextContainer}>
+            <Text style={[styles.timerText, { color: currentTheme.color }]}>
+            {formatTime(timeLeft)}
+            </Text>
+            <Text style={styles.instructionText}>
+            {isActive ? 'O tempo está passando...' : 'Pausado'}
+            </Text>
+        </View>
       </View>
 
       {/* Controls */}
       <View style={styles.controlsContainer}>
         <TouchableOpacity 
           style={[styles.controlButton, { backgroundColor: currentTheme.color }]}
-          onPress={() => setIsActive(!isActive)}
+          onPress={() => {
+            if (isActive) {
+              pauseTimer();
+            } else {
+              resumeTimer();
+            }
+          }}
         >
           {isActive ? (
             <Pause color="#000" fill="#000" size={32} />
@@ -485,37 +694,40 @@ export default function TimerScreen() {
               Você entrou no fluxo! Quer estender seu foco e ganhar mais recompensa?
             </Text>
             
-            {/* Option 1: +10 min */}
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.oneMoreButton]}
-              onPress={() => handleOneMore(10, 5)}
-            >
-              <View style={{flexDirection: 'column', alignItems: 'center'}}>
-                 <Text style={styles.actionButtonText}>+10 min Foco</Text>
-                 <Text style={styles.actionSubText}>+5 min Recompensa</Text>
-              </View>
-            </TouchableOpacity>
+            {/* Dynamic Time Selector */}
+            <View style={styles.selectorContainer}>
+                <TouchableOpacity 
+                    style={styles.stepperButton} 
+                    onPress={() => setExtensionTime(prev => Math.max(5, prev - 5))}
+                >
+                    <Text style={styles.stepperText}>-</Text>
+                </TouchableOpacity>
+                
+                <View style={styles.valueContainer}>
+                    <Text style={styles.valueText}>{extensionTime}</Text>
+                    <Text style={styles.unitText}>min</Text>
+                </View>
 
-            {/* Option 2: +20 min */}
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.oneMoreButton]}
-              onPress={() => handleOneMore(20, 10)}
-            >
-              <View style={{flexDirection: 'column', alignItems: 'center'}}>
-                 <Text style={styles.actionButtonText}>+20 min Foco</Text>
-                 <Text style={styles.actionSubText}>+10 min Recompensa</Text>
-              </View>
-            </TouchableOpacity>
+                <TouchableOpacity 
+                    style={styles.stepperButton} 
+                    onPress={() => setExtensionTime(prev => prev + 5)}
+                >
+                    <Text style={styles.stepperText}>+</Text>
+                </TouchableOpacity>
+            </View>
 
-            {/* Option 3: +30 min */}
+            <View style={styles.bonusBadge}>
+              <Text style={styles.bonusText}>
+                  +{extensionTime} min FOCO = +{Math.floor(extensionTime / 2)} min RECOMPENSA
+              </Text>
+            </View>
+
             <TouchableOpacity 
               style={[styles.actionButton, styles.oneMoreButton]}
-              onPress={() => handleOneMore(30, 15)}
+              onPress={() => handleOneMore(extensionTime, Math.floor(extensionTime / 2))}
             >
-              <View style={{flexDirection: 'column', alignItems: 'center'}}>
-                 <Text style={styles.actionButtonText}>+30 min Foco</Text>
-                 <Text style={styles.actionSubText}>+15 min Recompensa</Text>
-              </View>
+              <Plus color="#FFF" size={20} style={{ marginRight: 8 }} />
+              <Text style={styles.actionButtonText}>Estender Foco</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -524,6 +736,33 @@ export default function TimerScreen() {
             >
               <Gift color="#000" size={20} style={{ marginRight: 8 }} />
               <Text style={[styles.actionButtonText, { color: '#000' }]}>Ir para Recompensa</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Reward End Modal */}
+      <Modal
+        visible={showRewardEndModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {}} 
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Clock color="#FF4500" size={32} />
+              <Text style={styles.modalTitle}>Acabou o Tempo!</Text>
+            </View>
+            <Text style={styles.modalDescription}>
+              Sua recompensa chegou ao fim.
+            </Text>
+            
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.finishButton, { backgroundColor: '#FF4500' }]}
+              onPress={handleStopReward}
+            >
+              <Text style={styles.actionButtonText}>Parar Recompensa</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -567,9 +806,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  timerSvg: {
+      transform: [{ rotateZ: '-90deg' }] 
+  },
+  timerTextContainer: {
+      position: 'absolute',
+      justifyContent: 'center',
+      alignItems: 'center',
   },
   timerText: {
-    fontSize: 90,
+    fontSize: 64, // Slightly smaller to fit circle
     fontWeight: 'bold',
     fontVariant: ['tabular-nums'],
   },
@@ -632,6 +880,42 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 22,
+  },
+  selectorContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 20,
+      marginBottom: 20,
+  },
+  stepperButton: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      backgroundColor: '#333',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: '#555',
+  },
+  stepperText: {
+      color: '#FFF',
+      fontSize: 24,
+      fontWeight: 'bold',
+  },
+  valueContainer: {
+      alignItems: 'center',
+      minWidth: 80,
+  },
+  valueText: {
+      color: '#FFF',
+      fontSize: 48,
+      fontWeight: 'bold',
+  },
+  unitText: {
+      color: '#A1A1AA',
+      fontSize: 14,
+      marginTop: -5,
   },
   bonusBadge: {
     backgroundColor: 'rgba(255, 69, 0, 0.15)',
