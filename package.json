@@ -8,7 +8,10 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "jest",
+    "build:android": "eas build -p android --profile production",
+    "build:android:apk": "eas build -p android --profile production-apk"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -26,6 +29,7 @@
     "expo-image": "~3.0.11",
     "expo-keep-awake": "~15.0.8",
     "expo-linking": "~8.0.11",
+    "expo-notifications": "~0.32.16",
     "expo-router": "~6.0.21",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
@@ -48,8 +52,11 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "@types/jest": "^29.5.14",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "jest": "^29.7.0",
+    "jest-expo": "~54.0.0",
     "react-native-svg-transformer": "^1.5.2",
     "typescript": "~5.9.2"
   },

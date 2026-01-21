@@ -1,12 +1,42 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import React, { useState, useRef, useMemo } from 'react';
+import { StyleSheet, Text, View, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Pressable, Animated, StyleProp, ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { useSettings } from '@/context/SettingsContext';
 import { Lock, Mail, User as UserIcon, ArrowLeft } from 'lucide-react-native';
+import { Theme } from '@/constants/theme';
+
+const PressableScale = ({
+  onPress,
+  children,
+  style,
+}: {
+  onPress?: () => void;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) => {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
+  };
+
+  return (
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
+    </Pressable>
+  );
+};
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { signUp } = useAuth();
+  const { theme } = useSettings();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -50,10 +80,14 @@ export default function RegisterScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      <View style={styles.background}>
+        <View style={styles.glowOrb} />
+        <View style={styles.glowOrbSecondary} />
+      </View>
       <View style={styles.content}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+        <PressableScale style={styles.backButton} onPress={handleBack}>
           <ArrowLeft color="#FFF" size={24} />
-        </TouchableOpacity>
+        </PressableScale>
 
         <View style={styles.header}>
           <Text style={styles.title}>Criar Conta</Text>
@@ -97,7 +131,7 @@ export default function RegisterScreen() {
             />
           </View>
 
-          <TouchableOpacity 
+          <PressableScale 
             style={[styles.button, loading && styles.buttonDisabled]} 
             onPress={handleRegister}
             disabled={loading}
@@ -107,17 +141,39 @@ export default function RegisterScreen() {
             ) : (
               <Text style={styles.buttonText}>CADASTRAR</Text>
             )}
-          </TouchableOpacity>
+          </PressableScale>
         </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121214',
+    backgroundColor: theme.colors.bg,
+  },
+  background: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  glowOrb: {
+    position: 'absolute',
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    top: -180,
+    right: -140,
+    backgroundColor: theme.colors.glowPrimary,
+  },
+  glowOrbSecondary: {
+    position: 'absolute',
+    width: 360,
+    height: 360,
+    borderRadius: 180,
+    bottom: -200,
+    left: -160,
+    backgroundColor: theme.colors.glowSecondary,
   },
   content: {
     flex: 1,
@@ -130,6 +186,10 @@ const styles = StyleSheet.create({
     left: 20,
     padding: 8,
     zIndex: 10,
+    backgroundColor: theme.colors.surfaceSoft,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   header: {
     marginBottom: 40,
@@ -137,12 +197,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#FFF',
+    color: theme.colors.text,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#A1A1AA',
+    color: theme.colors.textDim,
   },
   form: {
     gap: 16,
@@ -150,11 +210,11 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E1E24',
+    backgroundColor: theme.colors.surface,
     borderRadius: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: theme.colors.border,
     height: 56,
   },
   icon: {
@@ -162,22 +222,23 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: '#FFF',
+    color: theme.colors.text,
     fontSize: 16,
   },
   button: {
-    backgroundColor: '#00FF94',
+    backgroundColor: theme.colors.accent,
     height: 56,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
+    ...theme.shadow.accent,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   buttonText: {
-    color: '#000',
+    color: theme.colors.accentDark,
     fontSize: 16,
     fontWeight: 'bold',
   },

@@ -1,12 +1,42 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import React, { useState, useRef, useMemo } from 'react';
+import { StyleSheet, Text, View, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Pressable, Animated, StyleProp, ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { useSettings } from '@/context/SettingsContext';
 import { Lock, Mail } from 'lucide-react-native';
+import { Theme } from '@/constants/theme';
+
+const PressableScale = ({
+  onPress,
+  children,
+  style,
+}: {
+  onPress?: () => void;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) => {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
+  };
+
+  return (
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
+    </Pressable>
+  );
+};
 
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn, signInWithGoogle } = useAuth();
+  const { theme } = useSettings();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,6 +80,10 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      <View style={styles.background}>
+        <View style={styles.glowOrb} />
+        <View style={styles.glowOrbSecondary} />
+      </View>
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>Bem-vindo</Text>
@@ -82,7 +116,7 @@ export default function LoginScreen() {
             />
           </View>
 
-          <TouchableOpacity 
+          <PressableScale 
             style={[styles.button, loading && styles.buttonDisabled]} 
             onPress={handleLogin}
             disabled={loading || googleLoading}
@@ -92,7 +126,7 @@ export default function LoginScreen() {
             ) : (
               <Text style={styles.buttonText}>ENTRAR</Text>
             )}
-          </TouchableOpacity>
+          </PressableScale>
 
           <View style={styles.dividerContainer}>
               <View style={styles.line} />
@@ -100,7 +134,7 @@ export default function LoginScreen() {
               <View style={styles.line} />
           </View>
 
-          <TouchableOpacity 
+          <PressableScale 
             style={[styles.googleButton, googleLoading && styles.buttonDisabled]} 
             onPress={handleGoogleLogin}
             disabled={loading || googleLoading}
@@ -110,23 +144,45 @@ export default function LoginScreen() {
             ) : (
               <Text style={styles.googleButtonText}>Continuar com Google</Text>
             )}
-          </TouchableOpacity>
+          </PressableScale>
 
-          <TouchableOpacity style={styles.linkButton} onPress={handleRegister}>
+          <PressableScale style={styles.linkButton} onPress={handleRegister}>
             <Text style={styles.linkText}>
               Não tem conta? <Text style={styles.linkTextBold}>Registre-se</Text>
             </Text>
-          </TouchableOpacity>
+          </PressableScale>
         </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121214',
+    backgroundColor: theme.colors.bg,
+  },
+  background: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  glowOrb: {
+    position: 'absolute',
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    top: -180,
+    left: -140,
+    backgroundColor: theme.colors.glowPrimary,
+  },
+  glowOrbSecondary: {
+    position: 'absolute',
+    width: 360,
+    height: 360,
+    borderRadius: 180,
+    bottom: -200,
+    right: -160,
+    backgroundColor: theme.colors.glowSecondary,
   },
   content: {
     flex: 1,
@@ -139,12 +195,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#FFF',
+    color: theme.colors.text,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#A1A1AA',
+    color: theme.colors.textDim,
   },
   form: {
     gap: 16,
@@ -152,11 +208,11 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E1E24',
+    backgroundColor: theme.colors.surface,
     borderRadius: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: theme.colors.border,
     height: 56,
   },
   icon: {
@@ -164,22 +220,23 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: '#FFF',
+    color: theme.colors.text,
     fontSize: 16,
   },
   button: {
-    backgroundColor: '#00D4FF',
+    backgroundColor: theme.colors.accent,
     height: 56,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
+    ...theme.shadow.accent,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   buttonText: {
-    color: '#000',
+    color: theme.colors.accentDark,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -191,10 +248,10 @@ const styles = StyleSheet.create({
   line: {
       flex: 1,
       height: 1,
-      backgroundColor: '#333',
+      backgroundColor: theme.colors.border,
   },
   dividerText: {
-      color: '#666',
+      color: theme.colors.textMuted,
       paddingHorizontal: 10,
       fontSize: 12,
       fontWeight: 'bold',
@@ -206,10 +263,10 @@ const styles = StyleSheet.create({
       justifyContent: 'center',
       alignItems: 'center',
       borderWidth: 1,
-      borderColor: '#333',
+      borderColor: theme.colors.border,
   },
   googleButtonText: {
-      color: '#FFF',
+      color: theme.colors.text,
       fontSize: 16,
       fontWeight: '600',
   },
@@ -218,11 +275,11 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   linkText: {
-    color: '#A1A1AA',
+    color: theme.colors.textDim,
     fontSize: 14,
   },
   linkTextBold: {
-    color: '#00D4FF',
+    color: theme.colors.accent,
     fontWeight: 'bold',
   },
 });

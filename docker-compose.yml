@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  builder:
+    build: .
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - EXPO_TOKEN=${EXPO_TOKEN}
+      - NODE_OPTIONS=--openssl-legacy-provider --max_old_space_size=4096
+    working_dir: /app
+    command: tail -f /dev/null # Keep the container running

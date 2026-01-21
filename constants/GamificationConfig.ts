@@ -1,6 +1,8 @@
 export interface UserStats {
   totalFocusMinutes: number;
   completedCycles: number;
+  currentStreak: number;
+  lastFocusDate: string | null; // ISO Date String (YYYY-MM-DD)
 }
 
 export interface Achievement {
@@ -43,6 +45,14 @@ export const ACHIEVEMENTS: Achievement[] = [
     condition: (stats) => stats.completedCycles >= 5,
   },
   {
+    id: 'cycle_runner',
+    title: 'Corredor de Ciclos',
+    description: 'Complete 10 ciclos de foco.',
+    icon: 'rocket',
+    xpReward: 250,
+    condition: (stats) => stats.completedCycles >= 10,
+  },
+  {
     id: 'dedicated',
     title: 'Dedicado',
     description: 'Acumule 60 minutos de foco total.',
@@ -65,5 +75,77 @@ export const ACHIEVEMENTS: Achievement[] = [
     icon: 'medal',
     xpReward: 600,
     condition: (stats) => stats.totalFocusMinutes >= 300,
+  },
+  {
+    id: 'focused_hours',
+    title: 'Primeiras 10h',
+    description: 'Acumule 600 minutos de foco.',
+    icon: 'star',
+    xpReward: 800,
+    condition: (stats) => stats.totalFocusMinutes >= 600,
+  },
+  {
+    id: 'veteran',
+    title: 'Veterano',
+    description: 'Complete 50 ciclos de foco.',
+    icon: 'shield',
+    xpReward: 900,
+    condition: (stats) => stats.completedCycles >= 50,
+  },
+  {
+    id: 'deep_focus',
+    title: 'Foco Profundo',
+    description: 'Acumule 1200 minutos de foco.',
+    icon: 'gem',
+    xpReward: 1200,
+    condition: (stats) => stats.totalFocusMinutes >= 1200,
+  },
+  {
+    id: 'centurion',
+    title: 'Centurião',
+    description: 'Complete 100 ciclos de foco.',
+    icon: 'crown',
+    xpReward: 1500,
+    condition: (stats) => stats.completedCycles >= 100,
+  },
+  {
+    id: 'streak_3',
+    title: 'Trinca de Foco',
+    description: 'Mantenha 3 dias de ofensiva.',
+    icon: 'flame',
+    xpReward: 180,
+    condition: (stats) => stats.currentStreak >= 3,
+  },
+  {
+    id: 'streak_7',
+    title: 'Semana Imbatível',
+    description: 'Mantenha 7 dias de ofensiva.',
+    icon: 'flame',
+    xpReward: 420,
+    condition: (stats) => stats.currentStreak >= 7,
+  },
+  {
+    id: 'streak_14',
+    title: 'Fortaleza',
+    description: 'Mantenha 14 dias de ofensiva.',
+    icon: 'flame',
+    xpReward: 900,
+    condition: (stats) => stats.currentStreak >= 14,
+  },
+  {
+    id: 'streak_30',
+    title: 'Lenda do Foco',
+    description: 'Mantenha 30 dias de ofensiva.',
+    icon: 'crown',
+    xpReward: 2500,
+    condition: (stats) => stats.currentStreak >= 30,
+  },
+  {
+    id: 'ultra_focus',
+    title: 'Ultra Foco',
+    description: 'Acumule 2400 minutos de foco.',
+    icon: 'zap',
+    xpReward: 2200,
+    condition: (stats) => stats.totalFocusMinutes >= 2400,
   },
 ];

@@ -18,7 +18,8 @@ export const formatTimeDisplay = (totalMinutes: number) => {
 
 export const fetchRanking = async (
   period: 'daily' | 'weekly' | 'monthly',
-  currentUserId: string | undefined
+  currentUserId: string | undefined,
+  filterIds?: string[] // IDs to include (Squad)
 ): Promise<RankingUser[]> => {
   try {
     // 1. Determine Start Date
@@ -39,20 +40,42 @@ export const fetchRanking = async (
     const startDateISO = startDate.toISOString();
 
     // 2. Fetch Sessions for the period
-    const { data: sessions, error: sessionError } = await supabase
+    // Optimization: Filter by user_ids if provided to avoid scanning full table
+    let sessionQuery = supabase
       .from('focus_sessions')
       .select('user_id, minutes')
       .gte('completed_at', startDateISO);
+    
+    if (filterIds) {
+        // If filterIds provided, include them + me
+        const idsToFetch = currentUserId ? [...filterIds, currentUserId] : filterIds;
+        if (idsToFetch.length > 0) {
+            sessionQuery = sessionQuery.in('user_id', idsToFetch);
+        } else {
+             // Following no one, show only me
+             if (currentUserId) sessionQuery = sessionQuery.eq('user_id', currentUserId);
+        }
+    }
+
+    const { data: sessions, error: sessionError } = await sessionQuery;
 
     if (sessionError) throw sessionError;
 
-    // 3. Fetch All Profiles
-    // Optimization: In a real app with many users, we would filter profiles by the user_ids found above 
-    // OR use pagination. For "Squads" (Friends), we would filter by friend list.
-    // Here we fetch all (prototype scale).
-    const { data: profiles, error: profileError } = await supabase
+    // 3. Fetch Profiles
+    let profileQuery = supabase
       .from('profiles')
       .select('id, username, avatar_url, is_focusing');
+
+    if (filterIds) {
+        const idsToFetch = currentUserId ? [...filterIds, currentUserId] : filterIds;
+        if (idsToFetch.length > 0) {
+            profileQuery = profileQuery.in('id', idsToFetch);
+        } else {
+             if (currentUserId) profileQuery = profileQuery.eq('id', currentUserId);
+        }
+    }
+
+    const { data: profiles, error: profileError } = await profileQuery;
       
     if (profileError) throw profileError;
 
@@ -66,11 +89,8 @@ export const fetchRanking = async (
 
     // 5. Build Ranking List
     const ranking: RankingUser[] = profiles?.map(profile => {
-        // If user has 0 minutes but exists, show them? Or filter? 
-        // Let's show them with 0 minutes to encourage them.
         const totalMinutes = userMap[profile.id] || 0;
         
-        // Generate a random color for avatar if no URL (consistent by ID)
         const colors = ['#FF4500', '#00FF94', '#00D4FF', '#FF0055', '#FFD600', '#BF5AF2'];
         const colorIndex = profile.id.charCodeAt(0) % colors.length;
 

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Vibration, FlatList, Alert, Modal, Dimensions, AppState } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Vibration, FlatList, Alert, Modal, Dimensions, AppState, Pressable, Animated as RNAnimated } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as Haptics from 'expo-haptics';
@@ -12,6 +12,7 @@ import { CYCLES, CycleDef } from '../constants/FocusConfig';
 import { useSettings } from '@/context/SettingsContext';
 import { useGamification } from '@/context/GamificationContext';
 import { X, Play, Pause, Gift, Brain, Coffee, Target, Plus, Clock } from 'lucide-react-native';
+import { Theme } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.8;
@@ -23,7 +24,7 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type TimerPhase = 'focus' | 'selection' | 'reward' | 'rest';
 
-const PHASE_CONFIG = {
+const createPhaseConfig = (theme: Theme) => ({
   focus: {
     color: '#FF4500', // Orange Red
     label: 'FOCO TOTAL',
@@ -31,10 +32,10 @@ const PHASE_CONFIG = {
     bg: '#2A1010',
   },
   selection: {
-    color: '#FFFFFF',
+    color: theme.colors.text,
     label: 'ESCOLHA SUA RECOMPENSA',
     icon: Gift,
-    bg: '#121214',
+    bg: theme.colors.bg,
   },
   reward: {
     color: '#00FF94', // Green
@@ -48,16 +49,17 @@ const PHASE_CONFIG = {
     icon: Coffee,
     bg: '#1A0A2A',
   },
-};
+});
 
 // --- Sub-component: Game of Darts ---
 interface RewardGameProps {
   onComplete: (reward: string) => void;
   rewardDuration: number;
   rewards: string[];
+  styles: ReturnType<typeof createGameStyles>;
 }
 
-const RewardGameScreen = ({ onComplete, rewardDuration, rewards }: RewardGameProps) => {
+const RewardGameScreen = ({ onComplete, rewardDuration, rewards, styles }: RewardGameProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [wonReward, setWonReward] = useState<string>('');
@@ -97,20 +99,20 @@ const RewardGameScreen = ({ onComplete, rewardDuration, rewards }: RewardGamePro
   };
 
   return (
-    <View style={gameStyles.container}>
-      <View style={gameStyles.header}>
-        <Text style={gameStyles.title}>Tente a Sorte!</Text>
-        <Text style={gameStyles.subtitle}>Lance o dardo para definir sua recompensa</Text>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Tente a Sorte!</Text>
+        <Text style={styles.subtitle}>Lance o dardo para definir sua recompensa</Text>
       </View>
 
       {/* Animation Area */}
-      <View style={gameStyles.animationContainer}>
+      <View style={styles.animationContainer}>
         {/* Using a static target background behind the Lottie for context if needed, 
             but usually Lottie covers it. Let's keep it subtle or remove if Lottie has bg.
             Assuming Lottie is transparent dart. We keep a placeholder target. */}
         
         {!isPlaying && (
-           <View style={gameStyles.staticTarget}>
+           <View style={styles.staticTarget}>
               <Target color="#333" size={200} strokeWidth={1} />
            </View>
         )}
@@ -118,7 +120,7 @@ const RewardGameScreen = ({ onComplete, rewardDuration, rewards }: RewardGamePro
         <LottieView
             ref={lottieRef}
             source={{ uri: 'https://lottie.host/a50c236b-b188-4111-8803-e025c25e2b08/87AxG9eeJb.lottie' }}
-            style={gameStyles.lottie}
+            style={styles.lottie}
             loop={false}
             autoPlay={false}
             onAnimationFinish={handleAnimationFinish}
@@ -126,14 +128,14 @@ const RewardGameScreen = ({ onComplete, rewardDuration, rewards }: RewardGamePro
       </View>
 
       {/* Controls */}
-      <View style={gameStyles.footer}>
+      <View style={styles.footer}>
         <TouchableOpacity 
-          style={[gameStyles.button, isPlaying && gameStyles.buttonDisabled]}
+          style={[styles.button, isPlaying && styles.buttonDisabled]}
           onPress={handleThrow}
           disabled={isPlaying}
           activeOpacity={0.8}
         >
-          <Text style={gameStyles.buttonText}>
+          <Text style={styles.buttonText}>
             {isPlaying ? 'LANÇANDO...' : 'LANÇAR DARDO'}
           </Text>
         </TouchableOpacity>
@@ -145,14 +147,14 @@ const RewardGameScreen = ({ onComplete, rewardDuration, rewards }: RewardGamePro
         transparent
         animationType="fade"
       >
-        <View style={gameStyles.modalOverlay}>
-          <View style={gameStyles.modalContent}>
-            <Text style={gameStyles.modalTitle}>NA MOSCA!</Text>
-            <Text style={gameStyles.modalReward}>{wonReward}</Text>
-            <Text style={gameStyles.modalSubtitle}>{rewardDuration} minutos de diversão</Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>NA MOSCA!</Text>
+            <Text style={styles.modalReward}>{wonReward}</Text>
+            <Text style={styles.modalSubtitle}>{rewardDuration} minutos de diversão</Text>
             
-            <TouchableOpacity style={gameStyles.modalButton} onPress={handleClaim}>
-              <Text style={gameStyles.modalButtonText}>Aproveitar</Text>
+            <TouchableOpacity style={styles.modalButton} onPress={handleClaim}>
+              <Text style={styles.modalButtonText}>Aproveitar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -161,10 +163,10 @@ const RewardGameScreen = ({ onComplete, rewardDuration, rewards }: RewardGamePro
   );
 };
 
-const gameStyles = StyleSheet.create({
+const createGameStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121214',
+    backgroundColor: theme.colors.bg,
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 40,
@@ -175,13 +177,13 @@ const gameStyles = StyleSheet.create({
     zIndex: 10,
   },
   title: {
-    color: '#FFF',
+    color: theme.colors.text,
     fontSize: 28,
     fontWeight: 'bold',
     marginBottom: 8,
   },
   subtitle: {
-    color: '#A1A1AA',
+    color: theme.colors.textDim,
     fontSize: 16,
   },
   animationContainer: {
@@ -207,7 +209,7 @@ const gameStyles = StyleSheet.create({
   button: {
     backgroundColor: '#FF4500',
     paddingVertical: 18,
-    borderRadius: 16,
+    borderRadius: theme.radius.md,
     alignItems: 'center',
     shadowColor: '#FF4500',
     shadowOffset: { width: 0, height: 4 },
@@ -220,7 +222,7 @@ const gameStyles = StyleSheet.create({
     opacity: 0.8,
   },
   buttonText: {
-    color: '#FFF',
+    color: theme.colors.text,
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: 1,
@@ -235,44 +237,44 @@ const gameStyles = StyleSheet.create({
   },
   modalContent: {
     width: '90%',
-    backgroundColor: '#1E1E24',
-    borderRadius: 24,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.xl,
     padding: 30,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: theme.colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.5,
     shadowRadius: 20,
   },
   modalTitle: {
-    color: '#00FF94',
+    color: theme.colors.accent,
     fontSize: 24,
     fontWeight: '900',
     marginBottom: 10,
     letterSpacing: 1,
   },
   modalReward: {
-    color: '#FFF',
+    color: theme.colors.text,
     fontSize: 32,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 10,
   },
   modalSubtitle: {
-    color: '#A1A1AA',
+    color: theme.colors.textDim,
     fontSize: 16,
     marginBottom: 30,
   },
   modalButton: {
-    backgroundColor: '#00FF94',
+    backgroundColor: theme.colors.accent,
     paddingVertical: 14,
     paddingHorizontal: 32,
-    borderRadius: 12,
+    borderRadius: theme.radius.md,
   },
   modalButtonText: {
-    color: '#000',
+    color: theme.colors.accentDark,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -284,8 +286,11 @@ export default function TimerScreen() {
   useKeepAwake(); // Keep screen on
   const router = useRouter();
   const { cycleId } = useLocalSearchParams();
-  const { cycles, rewards } = useSettings();
+  const { cycles, rewards, theme, alarmSound } = useSettings();
   const { processCycleCompletion, setIsFocusing } = useGamification();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const gameStyles = useMemo(() => createGameStyles(theme), [theme]);
+  const phaseConfig = useMemo(() => createPhaseConfig(theme), [theme]);
   
   // Find cycle config
   const cycle = cycles.find(c => c.id === cycleId) as CycleDef;
@@ -303,13 +308,15 @@ export default function TimerScreen() {
   // One More Feature State
   const [showOneMoreModal, setShowOneMoreModal] = useState(false);
   const [showRewardEndModal, setShowRewardEndModal] = useState(false);
-  const [extensionTime, setExtensionTime] = useState(10); // Default extension time
   const [accumulatedFocusTime, setAccumulatedFocusTime] = useState(cycle ? cycle.focusDuration : 0);
   const [accumulatedRewardTime, setAccumulatedRewardTime] = useState(cycle ? cycle.rewardDuration : 0);
+  const [isDeepFocus, setIsDeepFocus] = useState(false);
   
   // Animation State
   const [totalDuration, setTotalDuration] = useState(cycle ? cycle.focusDuration * 60 : 1);
   const progress = useSharedValue(1);
+  const pulseAnim = useRef(new RNAnimated.Value(0)).current;
+  const buttonScale = useRef(new RNAnimated.Value(1)).current;
 
   // Update Progress
   useEffect(() => {
@@ -320,6 +327,23 @@ export default function TimerScreen() {
           });
       }
   }, [timeLeft, totalDuration]);
+
+  useEffect(() => {
+    if (!isActive || phase === 'selection') {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(0);
+      return;
+    }
+
+    const loop = RNAnimated.loop(
+      RNAnimated.sequence([
+        RNAnimated.timing(pulseAnim, { toValue: 1, duration: 1600, useNativeDriver: true }),
+        RNAnimated.timing(pulseAnim, { toValue: 0, duration: 1600, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isActive, phase, pulseAnim]);
 
   const animatedCircleProps = useAnimatedProps(() => {
       return {
@@ -341,6 +365,12 @@ export default function TimerScreen() {
     return () => { void setIsFocusing(false); };
   }, [phase, isActive, showOneMoreModal]);
 
+  useEffect(() => {
+    if (phase !== 'focus' && isDeepFocus) {
+      setIsDeepFocus(false);
+    }
+  }, [phase, isDeepFocus]);
+
   // Validating cycle existence
   useEffect(() => {
     if (!cycle) {
@@ -351,6 +381,7 @@ export default function TimerScreen() {
 
   // Play Alarm Sound
   const playAlarm = async () => {
+    if (alarmSound !== 'alarm') return;
     try {
       const { sound } = await Audio.Sound.createAsync(
         require('../assets/sounds/alarm.mp3')
@@ -381,7 +412,7 @@ export default function TimerScreen() {
   }, []);
 
   const schedulePhaseEndNotification = useCallback(async (seconds: number) => {
-    const currentConfig = PHASE_CONFIG[phase];
+    const currentConfig = phaseConfig[phase];
     let title = `${currentConfig.label} finalizado`;
     let body = 'Hora de seguir para a próxima etapa.';
 
@@ -397,19 +428,26 @@ export default function TimerScreen() {
     }
 
     try {
+      const channelId = alarmSound === 'alarm'
+        ? 'timer-alarms'
+        : alarmSound === 'system'
+          ? 'timer-default'
+          : 'timer-silent';
+
       const id = await Notifications.scheduleNotificationAsync({
-        content: { title, body, sound: true },
+        content: { title, body, sound: alarmSound === 'alarm' ? 'alarm.mp3' : alarmSound === 'system' ? true : null },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
           seconds,
           repeats: false,
         },
+        android: { channelId },
       });
       scheduledNotificationIdRef.current = id;
     } catch (error) {
       console.log('Failed to schedule notification', error);
     }
-  }, [phase]);
+  }, [phase, phaseConfig, alarmSound]);
 
   const updateTimeLeft = useCallback(() => {
     if (!endTime) return;
@@ -576,8 +614,9 @@ export default function TimerScreen() {
 
   if (!cycle) return null;
 
-  const CurrentIcon = PHASE_CONFIG[phase].icon;
-  const currentTheme = PHASE_CONFIG[phase];
+  const CurrentIcon = phaseConfig[phase].icon;
+  const currentTheme = phaseConfig[phase];
+  const deepFocusEnabled = isDeepFocus && phase === 'focus' && !showOneMoreModal && !showRewardEndModal;
 
   // Render Selection Phase (Game)
   if (phase === 'selection') {
@@ -586,6 +625,7 @@ export default function TimerScreen() {
         onComplete={startReward} 
         rewardDuration={accumulatedRewardTime} // Pass accumulated reward time
         rewards={rewards}
+        styles={gameStyles}
       />
     );
   }
@@ -593,22 +633,39 @@ export default function TimerScreen() {
   // Render Timer Phases (Focus, Reward, Rest)
   return (
     <View style={[styles.container, { backgroundColor: currentTheme.bg }]}>
-      {/* Top Bar */}
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={handleCancel} style={styles.iconButton}>
-          <X color="#FFF" size={28} />
-        </TouchableOpacity>
-        <View style={styles.phaseBadge}>
-          <CurrentIcon color={currentTheme.color} size={18} />
-          <Text style={[styles.phaseText, { color: currentTheme.color }]}>
-            {phase === 'reward' && selectedReward ? selectedReward.toUpperCase() : currentTheme.label}
-          </Text>
-        </View>
-        <View style={{ width: 28 }} /> 
+      <View style={styles.background}>
+        <View style={[styles.glowOrb, { backgroundColor: `${currentTheme.color}33` }]} />
+        <View style={[styles.glowOrbSecondary, { backgroundColor: `${currentTheme.color}22` }]} />
       </View>
+      <View style={styles.mainContent} pointerEvents={deepFocusEnabled ? 'none' : 'auto'}>
+        {/* Top Bar */}
+        <View style={styles.topBar}>
+          {deepFocusEnabled ? <View style={{ width: 36 }} /> : (
+            <TouchableOpacity onPress={handleCancel} style={styles.iconButton}>
+              <X color="#FFF" size={28} />
+            </TouchableOpacity>
+          )}
+          <View style={styles.phaseBadge}>
+            <CurrentIcon color={currentTheme.color} size={18} />
+            <Text style={[styles.phaseText, { color: currentTheme.color }]}>
+              {phase === 'reward' && selectedReward ? selectedReward.toUpperCase() : currentTheme.label}
+            </Text>
+          </View>
+          <View style={{ width: 28 }} /> 
+        </View>
 
-      {/* Main Timer */}
-      <View style={styles.timerContainer}>
+        {/* Main Timer */}
+        <View style={styles.timerContainer}>
+        <RNAnimated.View
+          style={[
+            styles.timerHalo,
+            {
+              borderColor: `${currentTheme.color}66`,
+              opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.65] }),
+              transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1.04] }) }],
+            },
+          ]}
+        />
         <Svg width={CIRCLE_SIZE} height={CIRCLE_SIZE} style={styles.timerSvg}>
             {/* Background Circle */}
             <Circle
@@ -655,27 +712,54 @@ export default function TimerScreen() {
             {isActive ? 'O tempo está passando...' : 'Pausado'}
             </Text>
         </View>
+        </View>
+
+        {/* Controls */}
+        {!deepFocusEnabled ? (
+          <View style={styles.controlsContainer}>
+          <Pressable
+            onPressIn={() => {
+              RNAnimated.spring(buttonScale, { toValue: 0.95, useNativeDriver: true, friction: 6 }).start();
+            }}
+            onPressOut={() => {
+              RNAnimated.spring(buttonScale, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
+            }}
+            onPress={() => {
+              if (isActive) {
+                pauseTimer();
+              } else {
+                resumeTimer();
+              }
+            }}
+          >
+            <RNAnimated.View style={[styles.controlButton, { backgroundColor: currentTheme.color, transform: [{ scale: buttonScale }] }]}>
+              {isActive ? (
+                <Pause color="#000" fill="#000" size={32} />
+              ) : (
+                <Play color="#000" fill="#000" size={32} />
+              )}
+            </RNAnimated.View>
+          </Pressable>
+          {phase === 'focus' && (
+            <Pressable style={styles.deepFocusToggle} onPress={() => setIsDeepFocus(true)}>
+              <Text style={styles.deepFocusToggleText}>Ativar foco profundo</Text>
+            </Pressable>
+          )}
+          </View>
+        ) : null}
       </View>
 
-      {/* Controls */}
-      <View style={styles.controlsContainer}>
-        <TouchableOpacity 
-          style={[styles.controlButton, { backgroundColor: currentTheme.color }]}
-          onPress={() => {
-            if (isActive) {
-              pauseTimer();
-            } else {
-              resumeTimer();
-            }
-          }}
-        >
-          {isActive ? (
-            <Pause color="#000" fill="#000" size={32} />
-          ) : (
-            <Play color="#000" fill="#000" size={32} />
-          )}
-        </TouchableOpacity>
-      </View>
+      {deepFocusEnabled && (
+        <View style={styles.deepFocusFooter}>
+          <Pressable
+            onLongPress={() => setIsDeepFocus(false)}
+            delayLongPress={400}
+            style={styles.deepFocusPill}
+          >
+            <Text style={styles.deepFocusText}>Modo foco profundo · segure para sair</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* One More Modal */}
       <Modal
@@ -694,41 +778,50 @@ export default function TimerScreen() {
               Você entrou no fluxo! Quer estender seu foco e ganhar mais recompensa?
             </Text>
             
-            {/* Dynamic Time Selector */}
-            <View style={styles.selectorContainer}>
-                <TouchableOpacity 
-                    style={styles.stepperButton} 
-                    onPress={() => setExtensionTime(prev => Math.max(5, prev - 5))}
-                >
-                    <Text style={styles.stepperText}>-</Text>
-                </TouchableOpacity>
-                
-                <View style={styles.valueContainer}>
-                    <Text style={styles.valueText}>{extensionTime}</Text>
-                    <Text style={styles.unitText}>min</Text>
+            <Text style={styles.optionsTitle}>Escolha sua extensão</Text>
+            <View style={styles.optionsGrid}>
+              <TouchableOpacity 
+                style={[styles.optionCard, styles.optionCardAccent]}
+                onPress={() => handleOneMore(10, 5)}
+                activeOpacity={0.85}
+              >
+                <View>
+                  <Text style={styles.optionTitle}>+10 min</Text>
+                  <Text style={styles.optionSubtitle}>Esforço extra curto</Text>
                 </View>
+                <View style={styles.optionBadge}>
+                  <Text style={styles.optionBadgeText}>+5 min recompensa</Text>
+                </View>
+              </TouchableOpacity>
 
-                <TouchableOpacity 
-                    style={styles.stepperButton} 
-                    onPress={() => setExtensionTime(prev => prev + 5)}
-                >
-                    <Text style={styles.stepperText}>+</Text>
-                </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.optionCard}
+                onPress={() => handleOneMore(20, 10)}
+                activeOpacity={0.85}
+              >
+                <View>
+                  <Text style={styles.optionTitle}>+20 min</Text>
+                  <Text style={styles.optionSubtitle}>Ritmo consistente</Text>
+                </View>
+                <View style={styles.optionBadge}>
+                  <Text style={styles.optionBadgeText}>+10 min recompensa</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.optionCard}
+                onPress={() => handleOneMore(30, 15)}
+                activeOpacity={0.85}
+              >
+                <View>
+                  <Text style={styles.optionTitle}>+30 min</Text>
+                  <Text style={styles.optionSubtitle}>Sprint final</Text>
+                </View>
+                <View style={styles.optionBadge}>
+                  <Text style={styles.optionBadgeText}>+15 min recompensa</Text>
+                </View>
+              </TouchableOpacity>
             </View>
-
-            <View style={styles.bonusBadge}>
-              <Text style={styles.bonusText}>
-                  +{extensionTime} min FOCO = +{Math.floor(extensionTime / 2)} min RECOMPENSA
-              </Text>
-            </View>
-
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.oneMoreButton]}
-              onPress={() => handleOneMore(extensionTime, Math.floor(extensionTime / 2))}
-            >
-              <Plus color="#FFF" size={20} style={{ marginRight: 8 }} />
-              <Text style={styles.actionButtonText}>Estender Foco</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity 
               style={[styles.actionButton, styles.finishButton]}
@@ -772,11 +865,34 @@ export default function TimerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: 50,
     paddingHorizontal: 20,
+  },
+  mainContent: {
+    flex: 1,
+  },
+  background: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  glowOrb: {
+    position: 'absolute',
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    top: -140,
+    left: -80,
+  },
+  glowOrbSecondary: {
+    position: 'absolute',
+    width: 360,
+    height: 360,
+    borderRadius: 180,
+    bottom: -180,
+    right: -120,
   },
   topBar: {
     flexDirection: 'row',
@@ -785,8 +901,10 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.colors.surfaceSoft,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   phaseBadge: {
     flexDirection: 'row',
@@ -794,8 +912,8 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: theme.radius.lg,
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   phaseText: {
     fontSize: 14,
@@ -808,6 +926,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
+  timerHalo: {
+    position: 'absolute',
+    width: CIRCLE_SIZE + 36,
+    height: CIRCLE_SIZE + 36,
+    borderRadius: (CIRCLE_SIZE + 36) / 2,
+    borderWidth: 2,
+  },
   timerSvg: {
       transform: [{ rotateZ: '-90deg' }] 
   },
@@ -817,12 +942,13 @@ const styles = StyleSheet.create({
       alignItems: 'center',
   },
   timerText: {
-    fontSize: 64, // Slightly smaller to fit circle
-    fontWeight: 'bold',
+    fontSize: 68,
+    fontWeight: '900',
     fontVariant: ['tabular-nums'],
+    letterSpacing: 1,
   },
   instructionText: {
-    color: '#A1A1AA',
+    color: theme.colors.textDim,
     marginTop: 10,
     fontSize: 16,
   },
@@ -852,12 +978,12 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '90%',
-    backgroundColor: '#1E1E24',
-    borderRadius: 24,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.xl,
     padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: theme.colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.5,
@@ -870,66 +996,68 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    color: '#FFF',
+    color: theme.colors.text,
     fontSize: 24,
     fontWeight: 'bold',
   },
   modalDescription: {
-    color: '#A1A1AA',
+    color: theme.colors.textDim,
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 22,
   },
-  selectorContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 20,
-      marginBottom: 20,
+  optionsTitle: {
+    width: '100%',
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 10,
   },
-  stepperButton: {
-      width: 50,
-      height: 50,
-      borderRadius: 25,
-      backgroundColor: '#333',
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: '#555',
+  optionsGrid: {
+    width: '100%',
+    gap: 12,
+    marginBottom: 20,
   },
-  stepperText: {
-      color: '#FFF',
-      fontSize: 24,
-      fontWeight: 'bold',
-  },
-  valueContainer: {
-      alignItems: 'center',
-      minWidth: 80,
-  },
-  valueText: {
-      color: '#FFF',
-      fontSize: 48,
-      fontWeight: 'bold',
-  },
-  unitText: {
-      color: '#A1A1AA',
-      fontSize: 14,
-      marginTop: -5,
-  },
-  bonusBadge: {
-    backgroundColor: 'rgba(255, 69, 0, 0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    marginBottom: 24,
+  optionCard: {
+    backgroundColor: theme.colors.surfaceSoft,
     borderWidth: 1,
-    borderColor: 'rgba(255, 69, 0, 0.3)',
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  bonusText: {
-    color: '#FF4500',
-    fontWeight: 'bold',
-    fontSize: 14,
+  optionCardAccent: {
+    borderColor: 'rgba(255, 69, 0, 0.5)',
+    backgroundColor: 'rgba(255, 69, 0, 0.12)',
+  },
+  optionTitle: {
+    color: theme.colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  optionSubtitle: {
+    color: theme.colors.textDim,
+    fontSize: 13,
+    marginTop: 4,
+  },
+  optionBadge: {
+    backgroundColor: 'rgba(231, 184, 74, 0.16)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(231, 184, 74, 0.35)',
+  },
+  optionBadgeText: {
+    color: theme.colors.accent,
+    fontSize: 12,
+    fontWeight: '700',
   },
   actionButton: {
     width: '100%',
@@ -937,20 +1065,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: theme.radius.md,
     marginBottom: 12,
   },
   oneMoreButton: {
-    backgroundColor: '#333',
+    backgroundColor: theme.colors.surfaceSoft,
     borderWidth: 1,
-    borderColor: '#555',
+    borderColor: theme.colors.border,
   },
   finishButton: {
     backgroundColor: '#00FF94',
     marginTop: 4,
   },
   actionButtonText: {
-    color: '#FFF',
+    color: theme.colors.text,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -959,5 +1087,37 @@ const styles = StyleSheet.create({
       fontSize: 12,
       marginTop: 2,
       fontWeight: '600',
-  }
+  },
+  deepFocusToggle: {
+    marginTop: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceSoft,
+  },
+  deepFocusToggleText: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  deepFocusFooter: {
+    alignItems: 'center',
+    marginBottom: 40,
+    zIndex: 2,
+  },
+  deepFocusPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  deepFocusText: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
 });
