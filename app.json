@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSContactsUsageDescription": "Sincronizamos seus contatos para encontrar amigos que usam o app."
+      }
     },
     "android": {
       "permissions": [
@@ -17,7 +20,9 @@
         "POST_NOTIFICATIONS",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
-        "WAKE_LOCK"
+        "WAKE_LOCK",
+        "FOREGROUND_SERVICE",
+        "READ_CONTACTS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",

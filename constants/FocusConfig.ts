@@ -11,6 +11,14 @@ export interface CycleDef {
 
 export const CYCLES: CycleDef[] = [
   {
+    id: 'infinite',
+    label: 'Cronometro Infinito',
+    focusDuration: 5,
+    rewardDuration: 2,
+    restDuration: 0.5,
+    color: '#8B5CF6', // Violet
+  },
+  {
     id: 'micro',
     label: 'Ciclo Micro',
     focusDuration: 3,

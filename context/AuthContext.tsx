@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import { normalizePhone } from '@/utils/phone';
 
 // Ensure the browser can return to the app
 WebBrowser.maybeCompleteAuthSession();
@@ -15,6 +16,7 @@ export interface User {
   email: string;
   avatar?: string;
   bio?: string;
+  phone?: string;
 }
 
 interface AuthContextType {
@@ -22,7 +24,7 @@ interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (name: string, email: string, password: string) => Promise<void>;
+  signUp: (name: string, email: string, password: string, phone: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
@@ -95,8 +97,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) throw error;
   };
 
-  const signUp = async (name: string, email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
+  const signUp = async (name: string, email: string, password: string, phone: string) => {
+    const normalizedPhone = normalizePhone(phone);
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -106,6 +109,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       },
     });
     if (error) throw error;
+
+    const userId = data.user?.id;
+    if (userId) {
+      await supabase.from('profiles').upsert({
+        id: userId,
+        username: name,
+        phone: normalizedPhone,
+      });
+    }
   };
 
   const signInWithGoogle = async () => {
@@ -161,6 +173,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     if (error) throw error;
+
+    if (data.phone) {
+      await supabase.from('profiles').update({ phone: normalizePhone(data.phone) }).eq('id', user.id);
+    }
   };
 
   return (

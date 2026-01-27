@@ -10,6 +10,12 @@ import { SocialService } from '@/services/SocialService';
 import { X, Camera, LogOut, Save, Trophy, Lock, Flame, Clock, CheckCircle, ChevronRight, Users, Footprints, Target, Medal, Star, Crown, Zap, Rocket, Shield, Gem } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
 
+const formatDecimal = (value: number) => {
+  if (!Number.isFinite(value)) return '0';
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(2).replace('.', ',');
+};
+
 const PressableScale = ({
   onPress,
   children,
@@ -158,7 +164,7 @@ const AchievementBadge = ({
         <Text style={[styles.achievementTitle, !isUnlocked && styles.textLocked]} numberOfLines={1}>{title}</Text>
         <Text style={[styles.achievementDescription, !isUnlocked && styles.textLocked]} numberOfLines={2}>{description}</Text>
         <View style={[styles.xpPill, !isUnlocked && styles.xpPillLocked]}>
-          <Text style={[styles.achievementReward, !isUnlocked && styles.textLocked]}>+{xpReward} XP</Text>
+          <Text style={[styles.achievementReward, !isUnlocked && styles.textLocked]}>+{formatDecimal(xpReward)} XP</Text>
         </View>
       </Animated.View>
     </PressableScale>
@@ -176,6 +182,7 @@ export default function ProfileScreen() {
   const [bio, setBio] = useState(user?.bio || '');
   const [isEditing, setIsEditing] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
+  const [friendsCount, setFriendsCount] = useState(0);
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [showAchievementModal, setShowAchievementModal] = useState(false);
 
@@ -232,6 +239,9 @@ export default function ProfileScreen() {
       if (user) {
           SocialService.getUserProfile(user.id, user.id).then(p => {
               if (p) setFollowersCount(p.followers_count || 0);
+          });
+          SocialService.getFriendsCount(user.id).then(count => {
+              setFriendsCount(count);
           });
       }
   }, [user]);
@@ -303,7 +313,7 @@ export default function ProfileScreen() {
             </View>
             
             <Animated.View entering={ZoomIn.delay(400)} style={styles.levelBadge}>
-                <Text style={styles.levelText}>{level}</Text>
+                <Text style={styles.levelText}>{formatDecimal(level)}</Text>
             </Animated.View>
 
             <TouchableOpacity style={styles.cameraButton}>
@@ -314,15 +324,27 @@ export default function ProfileScreen() {
           <Text style={styles.emailText}>{user.email}</Text>
           <View style={styles.followersTag}>
               <Users color="#666" size={14} />
-              <Text style={styles.followersText}>{followersCount} Seguidores</Text>
+              <Text style={styles.followersText}>{formatDecimal(followersCount)} Seguidores</Text>
           </View>
+          <PressableScale style={styles.friendsLink} onPress={() => router.push('/friends' as any)}>
+            <View style={styles.friendsLinkInfo}>
+              <View style={styles.friendsIcon}>
+                <Users color={theme.colors.accent} size={16} />
+              </View>
+              <View>
+                <Text style={styles.friendsTitle}>Amigos</Text>
+                <Text style={styles.friendsSubtitle}>{formatDecimal(friendsCount)} conexões</Text>
+              </View>
+            </View>
+            <ChevronRight color={theme.colors.textMuted} size={18} />
+          </PressableScale>
         </Animated.View>
 
         {/* Level Progress */}
         <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.progressSection}>
             <View style={styles.xpRow}>
-                <Text style={styles.xpLabel}>Nível {level}</Text>
-                <Text style={styles.xpValue}>{xp} / {nextLevelXp} XP</Text>
+                <Text style={styles.xpLabel}>Nível {formatDecimal(level)}</Text>
+                <Text style={styles.xpValue}>{formatDecimal(xp)} / {formatDecimal(nextLevelXp)} XP</Text>
             </View>
             <View style={styles.progressBarBg}>
                 <View style={[styles.progressBarFill, { width: `${progressToNextLevel * 100}%` }]} />
@@ -335,21 +357,21 @@ export default function ProfileScreen() {
                 <View style={[styles.iconContainer, { backgroundColor: 'rgba(255,69,0,0.1)' }]}>
                     <Flame color="#FF4500" size={20} fill="#FF4500" />
                 </View>
-                <Text style={styles.statNumber}>{streak}</Text>
+                <Text style={styles.statNumber}>{formatDecimal(streak)}</Text>
                 <Text style={styles.statLabel}>Ofensiva</Text>
             </View>
             <View style={styles.statCard}>
                 <View style={[styles.iconContainer, { backgroundColor: 'rgba(0,212,255,0.1)' }]}>
                     <CheckCircle color="#00D4FF" size={20} />
                 </View>
-                <Text style={styles.statNumber}>{stats.completedCycles}</Text>
+                <Text style={styles.statNumber}>{formatDecimal(stats.completedCycles)}</Text>
                 <Text style={styles.statLabel}>Ciclos</Text>
             </View>
             <View style={styles.statCard}>
                 <View style={[styles.iconContainer, { backgroundColor: 'rgba(255,214,0,0.1)' }]}>
                     <Clock color="#FFD600" size={20} />
                 </View>
-                <Text style={styles.statNumber}>{Math.round(stats.totalFocusMinutes / 60)}h</Text>
+                <Text style={styles.statNumber}>{formatDecimal(Math.round(stats.totalFocusMinutes / 60))}h</Text>
                 <Text style={styles.statLabel}>Foco Total</Text>
             </View>
         </Animated.View>
@@ -365,7 +387,7 @@ export default function ProfileScreen() {
         <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.achievementsSection}>
             <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Conquistas</Text>
-                <Text style={styles.sectionCount}>{unlockedAchievements.length} / {ACHIEVEMENTS.length}</Text>
+                <Text style={styles.sectionCount}>{formatDecimal(unlockedAchievements.length)} / {formatDecimal(ACHIEVEMENTS.length)}</Text>
             </View>
             
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.achievementsScroll}>
@@ -426,19 +448,19 @@ export default function ProfileScreen() {
         <Animated.View entering={FadeInDown.delay(560).duration(600)} style={styles.reportCard}>
             <View style={styles.reportHeader}>
                 <Text style={styles.reportTitle}>Relatório semanal</Text>
-                <Text style={styles.reportSubtitle}>{weeklyStats.total} min</Text>
+                <Text style={styles.reportSubtitle}>{formatDecimal(weeklyStats.total)} min</Text>
             </View>
             <View style={styles.reportMetrics}>
                 <View style={styles.reportMetric}>
-                    <Text style={styles.reportMetricValue}>{totalHours}h</Text>
+                    <Text style={styles.reportMetricValue}>{formatDecimal(totalHours)}h</Text>
                     <Text style={styles.reportMetricLabel}>Foco total</Text>
                 </View>
                 <View style={styles.reportMetric}>
-                    <Text style={styles.reportMetricValue}>{weeklyStats.average} min</Text>
+                    <Text style={styles.reportMetricValue}>{formatDecimal(weeklyStats.average)} min</Text>
                     <Text style={styles.reportMetricLabel}>Média diária</Text>
                 </View>
                 <View style={styles.reportMetric}>
-                    <Text style={styles.reportMetricValue}>{stats.completedCycles}</Text>
+                    <Text style={styles.reportMetricValue}>{formatDecimal(stats.completedCycles)}</Text>
                     <Text style={styles.reportMetricLabel}>Ciclos</Text>
                 </View>
             </View>
@@ -455,7 +477,7 @@ export default function ProfileScreen() {
             <View style={styles.reportInsights}>
                 <View style={styles.reportInsightRow}>
                     <Text style={styles.reportInsightLabel}>Melhor dia</Text>
-                    <Text style={styles.reportInsightValue}>{weeklyStats.bestDay.label} · {weeklyStats.bestDay.minutes} min</Text>
+                    <Text style={styles.reportInsightValue}>{weeklyStats.bestDay.label} · {formatDecimal(weeklyStats.bestDay.minutes)} min</Text>
                 </View>
                 <View style={styles.reportInsightRow}>
                     <Text style={styles.reportInsightLabel}>Melhor horário</Text>
@@ -463,7 +485,7 @@ export default function ProfileScreen() {
                 </View>
                 <View style={styles.reportInsightRow}>
                     <Text style={styles.reportInsightLabel}>Consistência</Text>
-                    <Text style={styles.reportInsightValue}>{weeklyStats.consistency}% dos dias</Text>
+                    <Text style={styles.reportInsightValue}>{formatDecimal(weeklyStats.consistency)}% dos dias</Text>
                 </View>
             </View>
         </Animated.View>
@@ -555,7 +577,7 @@ export default function ProfileScreen() {
                       <Text style={styles.modalStatusText}>{isUnlocked ? 'Desbloqueada' : 'Bloqueada'}</Text>
                     </View>
                     <View style={styles.modalXpPill}>
-                      <Text style={styles.modalXpText}>+{selectedAchievement.xpReward} XP</Text>
+                      <Text style={styles.modalXpText}>+{formatDecimal(selectedAchievement.xpReward)} XP</Text>
                     </View>
                   </View>
                   <PressableScale onPress={closeAchievementModal} style={styles.modalPrimaryButton}>
@@ -709,6 +731,44 @@ const createStyles = (theme: Theme) => StyleSheet.create({
       color: '#A1A1AA',
       fontSize: 12,
       fontWeight: '600',
+  },
+  friendsLink: {
+    marginTop: 12,
+    width: '90%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  friendsLinkInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  friendsIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(231, 184, 74, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(231, 184, 74, 0.4)',
+  },
+  friendsTitle: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  friendsSubtitle: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
   },
   // Progress
   progressSection: {

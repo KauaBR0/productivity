@@ -16,8 +16,12 @@ interface SettingsContextType {
   theme: (typeof themes)[ThemeName];
   dailyGoalMinutes: number;
   setDailyGoalMinutes: (minutes: number) => void;
-  alarmSound: 'alarm' | 'system' | 'silent';
-  setAlarmSound: (sound: 'alarm' | 'system' | 'silent') => void;
+  alarmSound: 'alarm' | 'silent';
+  setAlarmSound: (sound: 'alarm' | 'silent') => void;
+  lofiTrack: 'random' | 'lofi1' | 'lofi2' | 'off';
+  setLofiTrack: (track: 'random' | 'lofi1' | 'lofi2' | 'off') => void;
+  rouletteExtraSpins: number;
+  setRouletteExtraSpins: (count: number) => void;
   isLoading: boolean;
 }
 
@@ -28,7 +32,9 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const [rewards, setRewards] = useState<string[]>(DEFAULT_REWARDS);
   const [themeName, setThemeNameState] = useState<ThemeName>(defaultThemeName);
   const [dailyGoalMinutes, setDailyGoalMinutesState] = useState(60);
-  const [alarmSound, setAlarmSoundState] = useState<'alarm' | 'system' | 'silent'>('alarm');
+  const [alarmSound, setAlarmSoundState] = useState<'alarm' | 'silent'>('alarm');
+  const [lofiTrack, setLofiTrackState] = useState<'random' | 'lofi1' | 'lofi2' | 'off'>('random');
+  const [rouletteExtraSpins, setRouletteExtraSpinsState] = useState(2);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load settings on mount
@@ -40,9 +46,18 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         const storedTheme = await AsyncStorage.getItem('user_theme');
         const storedGoal = await AsyncStorage.getItem('user_daily_goal');
         const storedAlarmSound = await AsyncStorage.getItem('user_alarm_sound');
+        const storedLofi = await AsyncStorage.getItem('user_lofi_track');
+        const storedRouletteSpins = await AsyncStorage.getItem('user_roulette_spins');
 
         if (storedCycles) {
-          setCycles(JSON.parse(storedCycles));
+          const parsed = JSON.parse(storedCycles) as CycleDef[];
+          const hasInfinite = parsed.some((cycle) => cycle.id === 'infinite');
+          if (!hasInfinite) {
+            const infiniteCycle = DEFAULT_CYCLES.find((cycle) => cycle.id === 'infinite');
+            setCycles(infiniteCycle ? [...parsed, infiniteCycle] : parsed);
+          } else {
+            setCycles(parsed);
+          }
         }
         if (storedRewards) {
           setRewards(JSON.parse(storedRewards));
@@ -56,8 +71,19 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
             setDailyGoalMinutesState(parsed);
           }
         }
-        if (storedAlarmSound === 'alarm' || storedAlarmSound === 'system' || storedAlarmSound === 'silent') {
+        if (storedAlarmSound === 'alarm' || storedAlarmSound === 'silent') {
           setAlarmSoundState(storedAlarmSound);
+        } else if (storedAlarmSound === 'system') {
+          setAlarmSoundState('alarm');
+        }
+        if (storedLofi === 'random' || storedLofi === 'lofi1' || storedLofi === 'lofi2' || storedLofi === 'off') {
+          setLofiTrackState(storedLofi);
+        }
+        if (storedRouletteSpins) {
+          const parsed = Number(storedRouletteSpins);
+          if (!Number.isNaN(parsed)) {
+            setRouletteExtraSpinsState(Math.max(0, Math.min(parsed, 5)));
+          }
         }
       } catch (error) {
         console.error('Failed to load settings:', error);
@@ -103,11 +129,27 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const saveAlarmSound = async (sound: 'alarm' | 'system' | 'silent') => {
+  const saveAlarmSound = async (sound: 'alarm' | 'silent') => {
     try {
       await AsyncStorage.setItem('user_alarm_sound', sound);
     } catch (error) {
       console.error('Failed to save alarm sound:', error);
+    }
+  };
+
+  const saveLofiTrack = async (track: 'random' | 'lofi1' | 'lofi2' | 'off') => {
+    try {
+      await AsyncStorage.setItem('user_lofi_track', track);
+    } catch (error) {
+      console.error('Failed to save lofi track:', error);
+    }
+  };
+
+  const saveRouletteSpins = async (count: number) => {
+    try {
+      await AsyncStorage.setItem('user_roulette_spins', String(count));
+    } catch (error) {
+      console.error('Failed to save roulette spins:', error);
     }
   };
 
@@ -142,11 +184,15 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     setThemeNameState(defaultThemeName);
     setDailyGoalMinutesState(60);
     setAlarmSoundState('alarm');
+    setLofiTrackState('random');
+    setRouletteExtraSpinsState(2);
     saveCycles(DEFAULT_CYCLES);
     saveRewards(DEFAULT_REWARDS);
     saveTheme(defaultThemeName);
     saveDailyGoal(60);
     saveAlarmSound('alarm');
+    saveLofiTrack('random');
+    saveRouletteSpins(2);
   };
 
   const setThemeName = (nextTheme: ThemeName) => {
@@ -160,9 +206,20 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     saveDailyGoal(safeMinutes);
   };
 
-  const setAlarmSound = (sound: 'alarm' | 'system' | 'silent') => {
+  const setAlarmSound = (sound: 'alarm' | 'silent') => {
     setAlarmSoundState(sound);
     saveAlarmSound(sound);
+  };
+
+  const setLofiTrack = (track: 'random' | 'lofi1' | 'lofi2' | 'off') => {
+    setLofiTrackState(track);
+    saveLofiTrack(track);
+  };
+
+  const setRouletteExtraSpins = (count: number) => {
+    const safeCount = Math.max(0, Math.min(count, 5));
+    setRouletteExtraSpinsState(safeCount);
+    saveRouletteSpins(safeCount);
   };
 
   return (
@@ -182,6 +239,10 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         setDailyGoalMinutes,
         alarmSound,
         setAlarmSound,
+        lofiTrack,
+        setLofiTrack,
+        rouletteExtraSpins,
+        setRouletteExtraSpins,
         isLoading 
       }}
     >

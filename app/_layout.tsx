@@ -48,12 +48,6 @@ export default function RootLayout() {
         lightColor: '#E7B84A',
       });
 
-      await Notifications.setNotificationChannelAsync('timer-default', {
-        name: 'Alertas do Timer (Sistema)',
-        importance: Notifications.AndroidImportance.MAX,
-        enableVibrate: true,
-      });
-
       await Notifications.setNotificationChannelAsync('timer-silent', {
         name: 'Alertas do Timer (Silencioso)',
         importance: Notifications.AndroidImportance.DEFAULT,
@@ -68,12 +62,19 @@ export default function RootLayout() {
         <SettingsProvider>
           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
             <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="index" />
+              <Stack.Screen name="(tabs)" />
               <Stack.Screen name="timer" options={{ animation: 'slide_from_right' }} />
-              <Stack.Screen name="settings" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
               <Stack.Screen name="login" options={{ animation: 'fade' }} />
               <Stack.Screen name="register" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="profile" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="search" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="friends" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="contacts-sync" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="groups" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="groups/create" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="groups/[id]" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="groups/ranking" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="user/[id]" options={{ animation: 'slide_from_right' }} />
             </Stack>
             <StatusBar style="light" />
           </ThemeProvider>

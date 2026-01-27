@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TextInput, Alert, KeyboardAvoidingView, Platfor
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
-import { Lock, Mail, User as UserIcon, ArrowLeft } from 'lucide-react-native';
+import { Lock, Mail, User as UserIcon, ArrowLeft, Phone } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
 
 const PressableScale = ({
@@ -40,18 +40,19 @@ export default function RegisterScreen() {
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !phone) {
       Alert.alert('Erro', 'Preencha todos os campos.');
       return;
     }
 
     setLoading(true);
     try {
-      await signUp(name, email, password);
+      await signUp(name, email, password, phone);
       
       Alert.alert(
         "Bem-vindo ao Productivy!",
@@ -116,6 +117,18 @@ export default function RegisterScreen() {
               autoCapitalize="none"
               value={email}
               onChangeText={setEmail}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Phone color="#A1A1AA" size={20} style={styles.icon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Telefone"
+              placeholderTextColor="#666"
+              keyboardType="phone-pad"
+              value={phone}
+              onChangeText={(text) => setPhone(text.replace(/[^0-9+() -]/g, ''))}
             />
           </View>
 
