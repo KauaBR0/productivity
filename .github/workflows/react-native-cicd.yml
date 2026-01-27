@@ -16,9 +16,6 @@ on:
         description: "Build type to run"
         options:
           - dev
-          - prod-apk
-          - prod-aab
-          - all
 
 env:
   NODE_OPTIONS: --openssl-legacy-provider
@@ -87,14 +84,9 @@ jobs:
           fi
 
       - name: 📱 Build Development APK (local)
-        if: github.event.inputs.buildType == 'all' || github.event.inputs.buildType == 'dev' || github.event_name == 'push'
+        if: github.event.inputs.buildType == 'dev' || github.event_name == 'push'
         working-directory: android
         run: ./gradlew assembleDebug
-
-      - name: 📱 Build Production APK (local)
-        if: github.event.inputs.buildType == 'all' || github.event.inputs.buildType == 'prod-apk' || github.event_name == 'push'
-        working-directory: android
-        run: ./gradlew assembleRelease
 
       - name: 📦 Upload APKs
         if: always()
