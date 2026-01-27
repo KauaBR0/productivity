@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { StyleSheet, Text, View, FlatList, Pressable, Animated, StyleProp, ViewStyle, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -43,7 +43,7 @@ export default function GroupsScreen() {
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
 
-  const loadGroups = async () => {
+  const loadGroups = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
@@ -55,11 +55,11 @@ export default function GroupsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     loadGroups();
-  }, [user?.id]);
+  }, [loadGroups]);
 
   const handleJoin = async () => {
     if (!user) return;

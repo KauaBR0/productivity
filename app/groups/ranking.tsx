@@ -59,7 +59,7 @@ export default function GroupRankingScreen() {
     } catch (error) {
       console.error('Failed to load groups', error);
     }
-  }, [user?.id, selectedGroupId]);
+  }, [user, selectedGroupId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -82,7 +82,7 @@ export default function GroupRankingScreen() {
     } finally {
       setLoading(false);
     }
-  }, [selectedGroupId, period, user?.id]);
+  }, [selectedGroupId, period, user]);
 
   useEffect(() => {
     loadGroupRanking();

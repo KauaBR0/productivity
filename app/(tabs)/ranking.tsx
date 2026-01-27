@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { StyleSheet, Text, View, FlatList, Image, Pressable, Animated, StyleProp, ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Contacts from 'expo-contacts';
@@ -52,12 +52,6 @@ export default function RankingScreen() {
   const currentUser = rankingData.find((item) => item.isUser);
   const currentUserRank = currentUser ? rankingData.findIndex((item) => item.id === currentUser.id) + 1 : null;
 
-  // Load Ranking
-  useEffect(() => {
-    if (!user) return;
-    loadRanking();
-  }, [period, scope, user?.id]);
-
   // Realtime Subscription
   useEffect(() => {
     const channel = supabase
@@ -84,7 +78,7 @@ export default function RankingScreen() {
     };
   }, []);
 
-  const loadContactIds = async () => {
+  const loadContactIds = useCallback(async () => {
     if (!user) return [];
     setContactsDenied(false);
     try {
@@ -129,9 +123,9 @@ export default function RankingScreen() {
       console.error('Failed to load contacts ranking', error);
       return [];
     }
-  };
+  }, [user]);
 
-  const loadRanking = async (forceContactsReload = false) => {
+  const loadRanking = useCallback(async (forceContactsReload = false) => {
     if (!user) return;
     setRefreshing(true);
     try {
@@ -159,7 +153,13 @@ export default function RankingScreen() {
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [period, scope, user, contactsFilterIds, loadContactIds]);
+
+  // Load Ranking
+  useEffect(() => {
+    if (!user) return;
+    loadRanking();
+  }, [loadRanking, user]);
 
   const renderItem = ({ item, index }: { item: RankingUser; index: number }) => {
     const isTop3 = index < 3;

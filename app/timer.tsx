@@ -6,8 +6,8 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import Svg, { Circle } from 'react-native-svg';
-import Animated, { useSharedValue, useAnimatedProps, withTiming, Easing } from 'react-native-reanimated';
-import { CYCLES, CycleDef } from '../constants/FocusConfig';
+import { useSharedValue, withTiming, Easing } from 'react-native-reanimated';
+import { CycleDef } from '../constants/FocusConfig';
 import { useSettings } from '@/context/SettingsContext';
 import { useGamification } from '@/context/GamificationContext';
 import { X, Play, Pause, Gift, Brain, Coffee, Clock, Volume2 } from 'lucide-react-native';
@@ -22,7 +22,6 @@ const RADIUS = (CIRCLE_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const ACTIVE_TIMER_STORAGE_KEY = 'active_timer_state_v1';
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type TimerPhase = 'focus' | 'selection' | 'reward' | 'rest';
 
@@ -189,7 +188,7 @@ export default function TimerScreen() {
               easing: Easing.linear,
           });
       }
-  }, [timeLeft, totalDuration]);
+  }, [timeLeft, totalDuration, progress]);
 
   useEffect(() => {
     if (!isActive || phase === 'selection') {
@@ -208,14 +207,6 @@ export default function TimerScreen() {
     return () => loop.stop();
   }, [isActive, phase, pulseAnim]);
 
-  const animatedCircleProps = useAnimatedProps(() => {
-      return {
-          strokeDashoffset: CIRCUMFERENCE * (1 - progress.value),
-      };
-  });
-
-  // Track start time
-  const [sessionStartTime, setSessionStartTime] = useState<number>(Date.now());
 
   // Focus Status Sync
   useEffect(() => {
@@ -231,7 +222,7 @@ export default function TimerScreen() {
         void setIsFocusing(false);
       }
     };
-  }, [phase, isActive, showOneMoreModal]);
+  }, [phase, isActive, showOneMoreModal, setIsFocusing]);
 
   useEffect(() => {
     if (phase !== 'focus' && isDeepFocus) {
@@ -308,10 +299,10 @@ export default function TimerScreen() {
       Alert.alert("Erro", "Ciclo não encontrado");
       router.back();
     }
-  }, [cycle]);
+  }, [cycle, router]);
 
   // Play Alarm Sound
-  const playAlarm = async () => {
+  const playAlarm = useCallback(async () => {
     if (alarmSound !== 'alarm') return;
     try {
       const { sound } = await Audio.Sound.createAsync(
@@ -328,7 +319,7 @@ export default function TimerScreen() {
     } catch (error) {
       console.log('Error playing sound', error);
     }
-  };
+  }, [alarmSound]);
 
   const stopLofi = useCallback(async () => {
     if (lofiSoundRef.current) {
@@ -493,13 +484,6 @@ export default function TimerScreen() {
     void syncNotification();
   }, [isActive, endTime, phase, cancelScheduledNotification, schedulePhaseEndNotification]);
 
-  // Handle phase end when time reaches zero
-  useEffect(() => {
-    if (isActive && timeLeft === 0 && phase !== 'selection') {
-      handlePhaseEnd();
-    }
-  }, [isActive, timeLeft, phase]);
-
   // Sync on AppState changes (resume from background)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -517,7 +501,7 @@ export default function TimerScreen() {
     return () => subscription.remove();
   }, [updateTimeLeft, isInfiniteCycle, phase, getFocusElapsedSeconds]);
 
-  const handlePhaseEnd = () => {
+  const handlePhaseEnd = useCallback(() => {
     if (!isActive) return; // Prevent double trigger
     if (isInfiniteCycle && phase === 'focus') return;
     setIsActive(false);
@@ -554,7 +538,22 @@ export default function TimerScreen() {
         },
       ]);
     }
-  };
+  }, [
+    isActive,
+    isInfiniteCycle,
+    phase,
+    cancelScheduledNotification,
+    clearTimerState,
+    playAlarm,
+    router,
+  ]);
+
+  // Handle phase end when time reaches zero
+  useEffect(() => {
+    if (isActive && timeLeft === 0 && phase !== 'selection') {
+      handlePhaseEnd();
+    }
+  }, [isActive, timeLeft, phase, handlePhaseEnd]);
 
   const handleFinishFocus = async () => {
     setShowOneMoreModal(false);

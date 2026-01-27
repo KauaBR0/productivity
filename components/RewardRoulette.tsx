@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   Animated,
   TouchableOpacity,
   Vibration,
@@ -42,7 +41,6 @@ interface RewardRouletteProps {
   theme?: Theme;
 }
 
-const { width } = Dimensions.get('window');
 const ITEM_HEIGHT = 70; // Aumentei a altura para caber fontes maiores
 const VISIBLE_ITEMS = 5;
 const WHEEL_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
@@ -88,6 +86,8 @@ const WheelItem = React.memo(
   }
 );
 
+WheelItem.displayName = 'WheelItem';
+
 export default function RewardRoulette({
   rewards = [],
   rewardDuration = 30,
@@ -118,11 +118,12 @@ export default function RewardRoulette({
   const startOffset = useMemo(() => (data.length / 2) * ITEM_HEIGHT, [data.length]);
 
   useEffect(() => {
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       flatListRef.current?.scrollToOffset({ offset: startOffset, animated: false });
       scrollAnim.setValue(startOffset);
     }, 100);
-  }, [startOffset]);
+    return () => clearTimeout(timeout);
+  }, [startOffset, scrollAnim]);
 
   useEffect(() => {
     setSpinsLeft(Math.max(1, 1 + extraSpins));
@@ -167,7 +168,7 @@ export default function RewardRoulette({
       flatListRef.current?.scrollToOffset({ offset: value, animated: false });
     });
     return () => scrollAnim.removeListener(listener);
-  }, []);
+  }, [scrollAnim]);
 
   const handleAccept = () => {
     if (selectedReward) onComplete(selectedReward);

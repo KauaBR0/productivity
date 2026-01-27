@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, Animated, StyleProp, ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Alert, Platform, Pressable, Animated, StyleProp, ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSettings } from '@/context/SettingsContext';
 import { CycleDef } from '@/constants/FocusConfig';

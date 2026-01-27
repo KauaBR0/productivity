@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, Text, View, Animated, StyleProp, ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,7 +53,7 @@ export default function ContactsSyncScreen() {
   const [addedIds, setAddedIds] = useState<Record<string, boolean>>({});
   const [contactNameByPhone, setContactNameByPhone] = useState<Record<string, string>>({});
 
-  const handleSync = async () => {
+  const handleSync = useCallback(async () => {
     if (!user) return;
     setSyncing(true);
     try {
@@ -120,7 +120,7 @@ export default function ContactsSyncScreen() {
     } finally {
       setSyncing(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     (async () => {
@@ -129,7 +129,7 @@ export default function ContactsSyncScreen() {
         handleSync();
       }
     })();
-  }, []);
+  }, [handleSync]);
 
   const handleAddFriend = async (profile: SocialProfile) => {
     if (!user) return;

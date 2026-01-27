@@ -15,7 +15,7 @@ import {
   UserCheck,
   UserPlus,
 } from "lucide-react-native";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -117,11 +117,7 @@ export default function PublicProfileScreen() {
   const [followingLoading, setFollowingLoading] = useState(false);
   const [showAchievementsModal, setShowAchievementsModal] = useState(false);
 
-  useEffect(() => {
-    loadProfile();
-  }, [id]);
-
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     if (!user || !id) return;
     setLoading(true);
     setHistoryLoading(true);
@@ -146,7 +142,11 @@ export default function PublicProfileScreen() {
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, [id, user, router]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const handleToggleFollow = async () => {
     if (!user || !profile) return;
@@ -175,7 +175,7 @@ export default function PublicProfileScreen() {
             : null,
         );
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Erro", "Falha ao atualizar seguidor.");
     } finally {
       setFollowingLoading(false);

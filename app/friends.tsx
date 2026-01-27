@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, Text, View, Animated, StyleProp, ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,7 +53,7 @@ export default function FriendsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
-  const loadFriends = async (isRefresh = false) => {
+  const loadFriends = useCallback(async (isRefresh = false) => {
     if (!user) return;
     if (isRefresh) {
       setRefreshing(true);
@@ -70,11 +70,11 @@ export default function FriendsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     loadFriends();
-  }, [user]);
+  }, [loadFriends]);
 
   const handleRemoveFriend = (friendId: string) => {
     if (!user) return;

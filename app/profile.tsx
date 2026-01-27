@@ -275,7 +275,7 @@ export default function ProfileScreen() {
       await updateProfile({ name, bio });
       setIsEditing(false);
       Alert.alert("Sucesso", "Perfil atualizado!");
-    } catch (error) {
+    } catch {
       Alert.alert("Erro", "Falha ao atualizar perfil.");
     }
   };

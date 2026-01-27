@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { StyleSheet, Text, View, FlatList, Pressable, Animated, StyleProp, ViewStyle, Alert, ActivityIndicator, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -60,7 +60,7 @@ export default function GroupDetailScreen() {
   const [draftName, setDraftName] = useState('');
   const [draftDescription, setDraftDescription] = useState('');
 
-  const loadGroup = async () => {
+  const loadGroup = useCallback(async () => {
     if (!groupId) return;
     setLoading(true);
     try {
@@ -84,11 +84,11 @@ export default function GroupDetailScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [groupId, router]);
 
   useEffect(() => {
     loadGroup();
-  }, [groupId]);
+  }, [loadGroup]);
 
   const myRole = members.find((member) => member.id === user?.id)?.role || 'member';
   const canManage = myRole === 'owner' || myRole === 'admin';
