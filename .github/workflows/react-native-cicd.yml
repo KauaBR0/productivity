@@ -21,7 +21,6 @@ on:
           - all
 
 env:
-  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
   NODE_OPTIONS: --openssl-legacy-provider
 
 jobs:
@@ -68,41 +67,32 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: 📦 Install dependencies
         run: |
-          npm install
-          npm install -g eas-cli
+          npm ci
 
-      - name: 🔄 Verify EAS CLI installation
-        run: |
-          echo "EAS CLI version:"
-          eas --version
-
-      - name: 📱 Build Development APK
+      - name: 📱 Build Development APK (local)
         if: github.event.inputs.buildType == 'all' || github.event.inputs.buildType == 'dev' || github.event_name == 'push'
-        run: |
-          export NODE_OPTIONS="--openssl-legacy-provider --max_old_space_size=4096"
-          eas build --platform android --profile development --non-interactive
-        env:
-          NODE_ENV: development
+        working-directory: android
+        run: ./gradlew assembleDebug
 
-      - name: 📱 Build Production APK
+      - name: 📱 Build Production APK (local)
         if: github.event.inputs.buildType == 'all' || github.event.inputs.buildType == 'prod-apk' || github.event_name == 'push'
-        run: |
-          export NODE_OPTIONS="--openssl-legacy-provider --max_old_space_size=4096"
-          eas build --platform android --profile production-apk --non-interactive
-        env:
-          NODE_ENV: production
+        working-directory: android
+        run: ./gradlew assembleRelease
 
-      - name: 📱 Build Production AAB
-        if: github.event.inputs.buildType == 'all' || github.event.inputs.buildType == 'prod-aab' || github.event_name == 'push'
-        run: |
-          export NODE_OPTIONS="--openssl-legacy-provider --max_old_space_size=4096"
-          eas build --platform android --profile production --non-interactive
-        env:
-          NODE_ENV: production
-
-      - name: 📦 Upload build links
+      - name: 📦 Upload APKs
         if: always()
-        run: |
-          echo "Builds are created on EAS. Check https://expo.dev/accounts/kauaan/projects/productivy/builds"
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apks
+          path: android/app/build/outputs/apk/**/*.apk
