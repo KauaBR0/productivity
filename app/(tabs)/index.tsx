@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, Platform, Pressable, Animated, StyleProp, ViewStyle, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import { CycleDef } from '../constants/FocusConfig';
+import { CycleDef } from '@/constants/FocusConfig';
 import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
 import { useGamification } from '@/context/GamificationContext';

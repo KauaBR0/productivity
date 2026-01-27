@@ -24,8 +24,18 @@ describe('RewardRoulette', () => {
       );
     });
 
-    const textNodes = tree!.root.findAllByType(Text).map((node) => node.props.children);
-    const flattened = textNodes.flatMap((value) => (Array.isArray(value) ? value : [value]));
+    const textNodes = tree!.root.findAllByType(Text);
+    const flattened: string[] = [];
+    textNodes.forEach((node: any) => {
+      const value = node.props.children as React.ReactNode;
+      if (Array.isArray(value)) {
+        value.forEach((child) => {
+          if (child !== null && child !== undefined) flattened.push(String(child));
+        });
+      } else if (value !== null && value !== undefined) {
+        flattened.push(String(value));
+      }
+    });
     expect(flattened).toContain('Ultimas recompensas');
     expect(flattened).toContain('Leitura');
     expect(flattened).toContain('Café');

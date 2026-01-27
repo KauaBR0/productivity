@@ -426,16 +426,17 @@ export default function TimerScreen() {
   const schedulePhaseEndNotification = useCallback(async (seconds: number) => {
     const { title, body } = getPhaseNotificationContent();
     try {
-      const channelId = alarmSound === 'alarm' ? 'timer-alarms' : 'timer-silent';
-
       const id = await Notifications.scheduleNotificationAsync({
-        content: { title, body, sound: alarmSound === 'alarm' ? 'alarm.mp3' : null },
+        content: {
+          title,
+          body,
+          sound: alarmSound === 'alarm' ? 'alarm.mp3' : undefined,
+        },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
           seconds,
           repeats: false,
         },
-        android: { channelId },
       });
       scheduledNotificationIdRef.current = id;
     } catch (error) {

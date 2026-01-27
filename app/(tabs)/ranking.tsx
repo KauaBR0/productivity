@@ -108,12 +108,16 @@ export default function RankingScreen() {
         response.data.forEach((contact) => {
           if (!contact.phoneNumbers?.length) return;
           contact.phoneNumbers.forEach((phone) => {
-            const normalized = normalizePhone(phone.number);
+            const normalized = phone.number ? normalizePhone(phone.number) : null;
             if (normalized) normalizedPhones.push(normalized);
           });
         });
         hasNext = response.hasNextPage;
-        offset = (response.pageOffset || 0) + pageSize;
+        const responseOffset =
+          'pageOffset' in response
+            ? (response as Contacts.ContactResponse & { pageOffset?: number }).pageOffset
+            : undefined;
+        offset = (responseOffset || 0) + pageSize;
       }
 
       const uniquePhones = Array.from(new Set(normalizedPhones));
@@ -150,7 +154,7 @@ export default function RankingScreen() {
           }
       }
 
-      const data = await fetchRanking(period, user?.id, filterIds);
+      const data = await fetchRanking(period, user.id, filterIds);
       setRankingData(data);
     } finally {
       setRefreshing(false);
@@ -332,8 +336,7 @@ export default function RankingScreen() {
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        refreshing={false}
-        refreshing={refreshing}
+          refreshing={refreshing}
         onRefresh={() => loadRanking(true)}
         ListEmptyComponent={
             <View style={styles.emptyState}>

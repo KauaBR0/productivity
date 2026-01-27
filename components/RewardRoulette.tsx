@@ -12,6 +12,7 @@ import {
   StatusBar
 } from 'react-native';
 import { RefreshCcw, Check } from 'lucide-react-native';
+import type { Theme } from '@/constants/theme';
 
 // --- TEMA DOURADO (LUXURY) ---
 const THEME = {
@@ -36,6 +37,9 @@ interface RewardRouletteProps {
   rewards: string[];
   rewardDuration?: number;
   onComplete: (reward: string) => void;
+  recentRewards?: string[];
+  extraSpins?: number;
+  theme?: Theme;
 }
 
 const { width } = Dimensions.get('window');
@@ -88,14 +92,18 @@ export default function RewardRoulette({
   rewards = [],
   rewardDuration = 30,
   onComplete,
+  recentRewards = [],
+  extraSpins = 0,
+  theme,
 }: RewardRouletteProps) {
   const [selectedReward, setSelectedReward] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [spinsLeft, setSpinsLeft] = useState(1);
+  const [spinsLeft, setSpinsLeft] = useState(() => Math.max(1, 1 + extraSpins));
   
   const scrollY = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<Animated.FlatList<any>>(null);
   const scrollAnim = useRef(new Animated.Value(0)).current;
+  const palette = theme ?? THEME;
 
   // --- Dados ---
   const data = useMemo(() => {
@@ -115,6 +123,10 @@ export default function RewardRoulette({
       scrollAnim.setValue(startOffset);
     }, 100);
   }, [startOffset]);
+
+  useEffect(() => {
+    setSpinsLeft(Math.max(1, 1 + extraSpins));
+  }, [extraSpins]);
 
   // --- Lógica de Girar ---
   const handleSpin = () => {
@@ -169,8 +181,10 @@ export default function RewardRoulette({
     [scrollY]
   );
 
+  const isSpinDisabled = isSpinning || (!!selectedReward && spinsLeft <= 0);
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, theme && { backgroundColor: palette.colors.bg }]}>
       <StatusBar barStyle="light-content" />
       
       <View style={styles.header}>
@@ -221,12 +235,12 @@ export default function RewardRoulette({
 
       <View style={styles.actions}>
         <TouchableOpacity
-          style={[styles.button, styles.spinButton, isSpinning && styles.disabledButton]}
+          style={[styles.button, styles.spinButton, isSpinDisabled && styles.disabledButton]}
           onPress={handleSpin}
-          disabled={isSpinning || (selectedReward && spinsLeft <= 0)}
+          disabled={isSpinDisabled}
           activeOpacity={0.8}
         >
-          <RefreshCcw color={THEME.colors.bg} size={20} style={{ fontWeight: 'bold' }} />
+          <RefreshCcw color={palette.colors.bg} size={20} />
           <Text style={styles.spinButtonText}>
             {selectedReward
               ? spinsLeft > 0
@@ -246,6 +260,19 @@ export default function RewardRoulette({
           <Text style={styles.acceptButtonText}>Confirmar</Text>
         </TouchableOpacity>
       </View>
+
+      {recentRewards.length > 0 && (
+        <View style={styles.recentRewards}>
+          <Text style={styles.recentTitle}>Ultimas recompensas</Text>
+          <View style={styles.recentList}>
+            {recentRewards.map((reward, index) => (
+              <View key={`${reward}-${index}`} style={styles.recentPill}>
+                <Text style={styles.recentText}>{reward}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -394,5 +421,37 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.5,
     shadowOpacity: 0,
+  },
+  recentRewards: {
+    marginTop: 28,
+    width: '100%',
+    alignItems: 'center',
+    gap: 10,
+  },
+  recentTitle: {
+    color: THEME.colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  recentList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  recentPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.35)',
+    backgroundColor: 'rgba(255, 215, 0, 0.12)',
+  },
+  recentText: {
+    color: THEME.colors.goldMain,
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

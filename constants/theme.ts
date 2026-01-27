@@ -143,3 +143,22 @@ export type ThemeName = keyof typeof themes;
 export const defaultThemeName: ThemeName = 'noir';
 
 export const theme = themes[defaultThemeName];
+
+export const Colors = {
+  light: {
+    text: '#11181C',
+    background: '#FFFFFF',
+    tint: themes.noir.colors.accent,
+    icon: '#687076',
+    tabIconDefault: '#687076',
+    tabIconSelected: themes.noir.colors.accent,
+  },
+  dark: {
+    text: themes.noir.colors.text,
+    background: themes.noir.colors.bg,
+    tint: themes.noir.colors.accent,
+    icon: themes.noir.colors.textMuted,
+    tabIconDefault: themes.noir.colors.textMuted,
+    tabIconSelected: themes.noir.colors.accent,
+  },
+} as const;

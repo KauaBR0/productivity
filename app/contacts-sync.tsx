@@ -78,7 +78,7 @@ export default function ContactsSyncScreen() {
         response.data.forEach((contact) => {
           if (!contact.phoneNumbers?.length) return;
           contact.phoneNumbers.forEach((phone) => {
-            const normalized = normalizePhone(phone.number);
+            const normalized = phone.number ? normalizePhone(phone.number) : null;
             if (normalized) {
               normalizedPhones.push(normalized);
               const key = formatPhoneKey(normalized);
@@ -89,7 +89,11 @@ export default function ContactsSyncScreen() {
           });
         });
         hasNext = response.hasNextPage;
-        offset = (response.pageOffset || 0) + pageSize;
+        const responseOffset =
+          'pageOffset' in response
+            ? (response as Contacts.ContactResponse & { pageOffset?: number }).pageOffset
+            : undefined;
+        offset = (responseOffset || 0) + pageSize;
       }
 
       const uniquePhones = Array.from(new Set(normalizedPhones));

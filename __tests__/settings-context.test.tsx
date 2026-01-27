@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 jest.mock('@react-native-async-storage/async-storage');
 
-type SettingsSnapshot = ReturnType<typeof useSettings>;
+type SettingsSnapshot = any;
 
 const flushPromises = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -73,7 +73,7 @@ describe('SettingsContext', () => {
       await flushPromises();
     });
 
-    const ids = snapshot?.cycles.map((cycle) => cycle.id) || [];
+    const ids = snapshot?.cycles.map((cycle: any) => cycle.id) || [];
     expect(ids).toContain('custom_1');
     expect(ids).toContain('infinite');
   });
@@ -100,7 +100,7 @@ describe('SettingsContext', () => {
       await flushPromises();
     });
 
-    const infiniteCount = snapshot?.cycles.filter((cycle) => cycle.id === 'infinite').length || 0;
+    const infiniteCount = snapshot?.cycles.filter((cycle: any) => cycle.id === 'infinite').length || 0;
     expect(infiniteCount).toBe(1);
   });
 
@@ -176,7 +176,7 @@ describe('SettingsContext', () => {
       snapshot?.updateCycle({ ...firstCycle!, focusDuration: 99 });
       await flushPromises();
     });
-    expect(snapshot?.cycles.find((cycle) => cycle.id === firstCycle?.id)?.focusDuration).toBe(99);
+    expect(snapshot?.cycles.find((cycle: any) => cycle.id === firstCycle?.id)?.focusDuration).toBe(99);
 
     await act(async () => {
       snapshot?.updateRewards(['Nova recompensa']);

@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CYCLES as DEFAULT_CYCLES, REWARDS as DEFAULT_REWARDS, CycleDef } from '../constants/FocusConfig';
 import { defaultThemeName, ThemeName, themes } from '../constants/theme';
 
-interface SettingsContextType {
+export interface SettingsContextType {
   cycles: CycleDef[];
   rewards: string[];
   updateCycle: (updatedCycle: CycleDef) => void;
@@ -251,7 +251,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-export const useSettings = () => {
+export const useSettings = (): SettingsContextType => {
   const context = useContext(SettingsContext);
   if (context === undefined) {
     throw new Error('useSettings must be used within a SettingsProvider');
