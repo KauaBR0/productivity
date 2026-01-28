@@ -19,7 +19,7 @@ on:
         type: choice
         description: "Build type to run"
         options:
-          - dev
+          - release
 
 env:
   NODE_OPTIONS: --openssl-legacy-provider
@@ -88,14 +88,14 @@ jobs:
             npx expo prebuild --platform android --no-install
           fi
 
-      - name: 📱 Build Development APK (local)
-        if: github.event.inputs.buildType == 'dev' || github.event_name == 'push'
+      - name: 📱 Build Release APK (local)
+        if: github.event.inputs.buildType == 'release' || github.event_name == 'push'
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleRelease
 
-      - name: 📦 Upload APKs
+      - name: 📦 Upload APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-apks
-          path: android/app/build/outputs/apk/**/*.apk
+          name: app-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
