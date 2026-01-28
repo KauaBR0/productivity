@@ -1,5 +1,9 @@
 name: React Native CI/CD
 
+concurrency:
+  group: react-native-cicd-${{ github.ref }}
+  cancel-in-progress: false
+
 on:
   push:
     branches: [main, master]
@@ -54,6 +58,7 @@ jobs:
     needs: test
     if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) || github.event_name == 'workflow_dispatch'
     runs-on: tenki-standard-medium-4c-8g
+    timeout-minutes: 90
     steps:
       - name: 🏗 Checkout repository
         uses: actions/checkout@v4
