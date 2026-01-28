@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="#0f172a"
+  android:gravity="center"
+  android:orientation="vertical"
+  android:padding="24dp">
+
+  <TextView
+    android:id="@+id/blocked_title"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Bloqueado pela sessao"
+    android:textColor="#f8fafc"
+    android:textSize="22sp"
+    android:textStyle="bold" />
+
+  <TextView
+    android:id="@+id/blocked_subtitle"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="8dp"
+    android:text="Este app esta bloqueado durante a sessao ativa."
+    android:textColor="#cbd5f5"
+    android:textSize="14sp" />
+
+  <TextView
+    android:id="@+id/blocked_package_text"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="16dp"
+    android:text="com.app.exemplo"
+    android:textColor="#94a3b8"
+    android:textSize="12sp" />
+
+  <Button
+    android:id="@+id/block_back_button"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="24dp"
+    android:paddingLeft="24dp"
+    android:paddingRight="24dp"
+    android:text="Voltar ao Productivy" />
+
+</LinearLayout>

@@ -42,7 +42,7 @@ export default function SettingsScreen() {
   const [rouletteInput, setRouletteInput] = useState(String(rouletteExtraSpins));
   const previewSoundRef = useRef<Audio.Sound | null>(null);
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const blockerAvailable = useMemo(() => isAppBlockerAvailable(), []);
+  const blockerAvailable = isAppBlockerAvailable();
   const [accessibilityEnabled, setAccessibilityEnabled] = useState(false);
   const [installedApps, setInstalledApps] = useState<{ packageName: string; label: string }[]>([]);
   const [appsLoading, setAppsLoading] = useState(false);
@@ -218,7 +218,7 @@ export default function SettingsScreen() {
       }
     });
     return () => subscription.remove();
-  }, []);
+  }, [blockerAvailable]);
 
   React.useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -242,7 +242,7 @@ export default function SettingsScreen() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [blockerAvailable]);
 
   const blockedSet = useMemo(() => new Set(blockedApps), [blockedApps]);
 
