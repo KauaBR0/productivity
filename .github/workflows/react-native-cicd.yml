@@ -105,8 +105,10 @@ jobs:
 
       - name: 📱 Build Release APK (local)
         if: github.event.inputs.buildType == 'release' || github.event_name == 'push'
-        working-directory: android
-        run: ./gradlew assembleRelease
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew assembleRelease
 
       - name: 📦 Upload APK
         if: always()
