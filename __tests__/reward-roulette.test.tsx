@@ -11,6 +11,7 @@ jest.mock('lucide-react-native', () => ({
 
 describe('RewardRoulette', () => {
   it('renders recent rewards history when provided', async () => {
+    jest.useFakeTimers();
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
@@ -22,6 +23,9 @@ describe('RewardRoulette', () => {
           theme={theme}
         />
       );
+    });
+    act(() => {
+      jest.runOnlyPendingTimers();
     });
 
     const textNodes = tree!.root.findAllByType(Text);
@@ -39,9 +43,14 @@ describe('RewardRoulette', () => {
     expect(flattened).toContain('Ultimas recompensas');
     expect(flattened).toContain('Leitura');
     expect(flattened).toContain('Café');
+    act(() => {
+      tree!.unmount();
+    });
+    jest.useRealTimers();
   });
 
   it('falls back to Tempo Livre when rewards list is empty', async () => {
+    jest.useFakeTimers();
     const onComplete = jest.fn();
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
@@ -57,11 +66,27 @@ describe('RewardRoulette', () => {
       );
     });
 
-    const button = tree!.root.findAllByType(TouchableOpacity)[0];
     act(() => {
-      button.props.onPress();
+      jest.runOnlyPendingTimers();
+    });
+
+    const buttons = tree!.root.findAllByType(TouchableOpacity);
+    const spinButton = buttons[0];
+    const acceptButton = buttons[1];
+    act(() => {
+      spinButton.props.onPress();
+    });
+    act(() => {
+      jest.runAllTimers();
+    });
+    act(() => {
+      acceptButton.props.onPress();
     });
 
     expect(onComplete).toHaveBeenCalledWith('Tempo Livre');
+    act(() => {
+      tree!.unmount();
+    });
+    jest.useRealTimers();
   });
 });

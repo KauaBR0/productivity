@@ -48,7 +48,7 @@ describe('SettingsContext', () => {
     expect(snapshot?.dailyGoalMinutes).toBe(60);
     expect(snapshot?.alarmSound).toBe('alarm');
     expect(snapshot?.lofiTrack).toBe('random');
-    expect(snapshot?.rouletteExtraSpins).toBe(2);
+    expect(snapshot?.rouletteExtraSpins).toBe(1);
   });
 
   it('adds infinite cycle when missing from stored cycles', async () => {
@@ -190,10 +190,10 @@ describe('SettingsContext', () => {
     });
     expect(snapshot?.rewards).toEqual(DEFAULT_REWARDS);
     expect(snapshot?.cycles.length).toBe(DEFAULT_CYCLES.length);
-    expect(snapshot?.rouletteExtraSpins).toBe(2);
+    expect(snapshot?.rouletteExtraSpins).toBe(1);
   });
 
-  it('clamps roulette extra spins between 0 and 5', async () => {
+  it('clamps roulette extra spins between 0 and 1', async () => {
     let snapshot: SettingsSnapshot | null = null;
 
     act(() => {
@@ -218,6 +218,6 @@ describe('SettingsContext', () => {
       snapshot?.setRouletteExtraSpins(10);
       await flushPromises();
     });
-    expect(snapshot?.rouletteExtraSpins).toBe(5);
+    expect(snapshot?.rouletteExtraSpins).toBe(1);
   });
 });
