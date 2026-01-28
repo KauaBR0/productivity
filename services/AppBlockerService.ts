@@ -15,6 +15,8 @@ type InstalledApp = {
 const BlockerModule = NativeModules?.AppBlocker;
 const isAndroid = Platform.OS === 'android';
 
+export const isAppBlockerAvailable = () => isAndroid && !!BlockerModule;
+
 export const setBlocklist = async (packages: string[]) => {
   if (!isAndroid || !BlockerModule?.setBlocklist) return;
   BlockerModule.setBlocklist(packages);

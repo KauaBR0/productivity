@@ -6,7 +6,7 @@ import { CycleDef } from '@/constants/FocusConfig';
 import { themes, ThemeName, Theme } from '@/constants/theme';
 import { Plus, Trash2, RotateCcw, Volume2, Music2, PhoneCall, X, Shield, ShieldCheck, Search, Check } from 'lucide-react-native';
 import { Audio } from 'expo-av';
-import { getInstalledApps, isAccessibilityEnabled, openAccessibilitySettings } from '@/services/AppBlockerService';
+import { getInstalledApps, isAccessibilityEnabled, isAppBlockerAvailable, openAccessibilitySettings } from '@/services/AppBlockerService';
 
 const PressableScale = ({
   onPress,
@@ -42,6 +42,7 @@ export default function SettingsScreen() {
   const [rouletteInput, setRouletteInput] = useState(String(rouletteExtraSpins));
   const previewSoundRef = useRef<Audio.Sound | null>(null);
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const blockerAvailable = useMemo(() => isAppBlockerAvailable(), []);
   const [accessibilityEnabled, setAccessibilityEnabled] = useState(false);
   const [installedApps, setInstalledApps] = useState<{ packageName: string; label: string }[]>([]);
   const [appsLoading, setAppsLoading] = useState(false);
@@ -209,6 +210,7 @@ export default function SettingsScreen() {
 
   React.useEffect(() => {
     if (Platform.OS !== 'android') return;
+    if (!blockerAvailable) return;
     void checkAccessibility();
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
@@ -220,6 +222,7 @@ export default function SettingsScreen() {
 
   React.useEffect(() => {
     if (Platform.OS !== 'android') return;
+    if (!blockerAvailable) return;
     let isMounted = true;
     const loadApps = async () => {
       setAppsLoading(true);
@@ -449,6 +452,13 @@ export default function SettingsScreen() {
           {Platform.OS !== 'android' ? (
             <View style={styles.blockerDisabledCard}>
               <Text style={styles.blockerDisabledText}>Disponível apenas no Android.</Text>
+            </View>
+          ) : !blockerAvailable ? (
+            <View style={styles.blockerDisabledCard}>
+              <Text style={styles.blockerDisabledText}>
+                Bloqueio nativo indisponível neste APK. Reinstale um build que
+                inclua o módulo de bloqueio.
+              </Text>
             </View>
           ) : (
             <>
