@@ -90,6 +90,13 @@ jobs:
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
+      - name: 🔎 Verify native blocker sources
+        run: |
+          if [ ! -f android/app/src/main/java/com/kauaan/productivy/blocker/BlockerModule.kt ]; then
+            echo "Missing native blocker sources. Ensure android/ is tracked in git."
+            exit 1
+          fi
+
       - name: 🧱 Ensure Android project exists
         run: |
           if [ ! -d android ]; then
