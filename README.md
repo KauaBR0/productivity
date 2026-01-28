@@ -1,50 +1,49 @@
-# Welcome to your Expo app 👋
+# Productivy
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+App de foco com cronometro, recompensas e bloqueio de apps no Android.
 
-## Get started
+## Destaques
 
-1. Install dependencies
+- Cronometro com ciclos configuraveis (foco, recompensa, descanso).
+- Modo infinito com transicoes manuais entre fases.
+- Roleta de recompensas com 1 giro extra no maximo.
+- Bloqueio de apps no Android via Accessibility Service.
 
-   ```bash
-   npm install
-   ```
+## Requisitos
 
-2. Start the app
+- Node.js + npm.
+- Android: para testar o bloqueio de apps, use **dev build** (Expo Go nao suporta modulos nativos).
 
-   ```bash
-   npx expo start
-   ```
+## Como rodar
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+1. Instalar dependencias
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Rodar no Android (dev build)
 
-## Learn more
+```bash
+npm run android
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+3. Rodar no Expo (sem modulos nativos)
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npx expo start
+```
 
-## Join the community
+## Bloqueio de apps (Android)
 
-Join our community of developers creating universal apps.
+1. Abra **Configuracoes > Bloqueio de apps** no app.
+2. Ative a acessibilidade quando solicitado.
+3. Selecione os apps que quer bloquear.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+O bloqueio fica ativo automaticamente durante a fase de foco.
+
+## Notas sobre o modo infinito
+
+- O foco so entra no ranking quando o usuario vai para recompensa ou encerra o ciclo durante o foco.
+- A fase de recompensa nao pode ser estendida.
+- A fase de descanso pode ser estendida com +5, +10, +15 minutos.

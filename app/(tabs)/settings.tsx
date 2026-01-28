@@ -1,11 +1,12 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Alert, Platform, Pressable, Animated, StyleProp, ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Alert, Platform, Pressable, Animated, StyleProp, ViewStyle, AppState, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSettings } from '@/context/SettingsContext';
 import { CycleDef } from '@/constants/FocusConfig';
 import { themes, ThemeName, Theme } from '@/constants/theme';
-import { Plus, Trash2, RotateCcw, Volume2, Music2, PhoneCall, X } from 'lucide-react-native';
+import { Plus, Trash2, RotateCcw, Volume2, Music2, PhoneCall, X, Shield, ShieldCheck, Search, Check } from 'lucide-react-native';
 import { Audio } from 'expo-av';
+import { getInstalledApps, isAccessibilityEnabled, openAccessibilitySettings } from '@/services/AppBlockerService';
 
 const PressableScale = ({
   onPress,
@@ -35,12 +36,17 @@ const PressableScale = ({
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { cycles, rewards, updateCycle, addCycle, removeCycle, updateRewards, resetSettings, theme, themeName, setThemeName, dailyGoalMinutes, setDailyGoalMinutes, alarmSound, setAlarmSound, lofiTrack, setLofiTrack, rouletteExtraSpins, setRouletteExtraSpins } = useSettings();
+  const { cycles, rewards, updateCycle, addCycle, removeCycle, updateRewards, resetSettings, theme, themeName, setThemeName, dailyGoalMinutes, setDailyGoalMinutes, alarmSound, setAlarmSound, lofiTrack, setLofiTrack, rouletteExtraSpins, setRouletteExtraSpins, blockedApps, setBlockedApps } = useSettings();
   const [newReward, setNewReward] = useState('');
   const [goalInput, setGoalInput] = useState(String(dailyGoalMinutes));
   const [rouletteInput, setRouletteInput] = useState(String(rouletteExtraSpins));
   const previewSoundRef = useRef<Audio.Sound | null>(null);
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const [accessibilityEnabled, setAccessibilityEnabled] = useState(false);
+  const [installedApps, setInstalledApps] = useState<{ packageName: string; label: string }[]>([]);
+  const [appsLoading, setAppsLoading] = useState(false);
+  const [appsError, setAppsError] = useState<string | null>(null);
+  const [appSearch, setAppSearch] = useState('');
 
   // Creation state for new cycle
   const [isCreatingCycle, setIsCreatingCycle] = useState(false);
@@ -190,6 +196,74 @@ export default function SettingsScreen() {
     } catch (error) {
       console.log('Error playing lofi preview', error);
     }
+  };
+
+  const checkAccessibility = async () => {
+    try {
+      const enabled = await isAccessibilityEnabled();
+      setAccessibilityEnabled(Boolean(enabled));
+    } catch {
+      setAccessibilityEnabled(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    void checkAccessibility();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void checkAccessibility();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  React.useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    let isMounted = true;
+    const loadApps = async () => {
+      setAppsLoading(true);
+      setAppsError(null);
+      try {
+        const apps = await getInstalledApps();
+        if (!isMounted) return;
+        setInstalledApps(apps);
+      } catch {
+        if (!isMounted) return;
+        setAppsError('Não foi possível carregar os apps.');
+      } finally {
+        if (isMounted) setAppsLoading(false);
+      }
+    };
+    void loadApps();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const blockedSet = useMemo(() => new Set(blockedApps), [blockedApps]);
+
+  const filteredApps = useMemo(() => {
+    const query = appSearch.trim().toLowerCase();
+    if (!query) return installedApps;
+    return installedApps.filter((app) => {
+      return (
+        app.label.toLowerCase().includes(query) ||
+        app.packageName.toLowerCase().includes(query)
+      );
+    });
+  }, [installedApps, appSearch]);
+
+  const visibleApps = useMemo(() => filteredApps.slice(0, 80), [filteredApps]);
+
+  const toggleBlockedApp = (packageName: string) => {
+    const next = new Set(blockedSet);
+    if (next.has(packageName)) {
+      next.delete(packageName);
+    } else {
+      next.add(packageName);
+    }
+    setBlockedApps(Array.from(next));
   };
 
   return (
@@ -366,6 +440,98 @@ export default function SettingsScreen() {
             })}
           </View>
         </View>
+
+        {/* App Blocker Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Bloqueio de apps</Text>
+          <Text style={styles.sectionSubtitle}>Selecione apps para bloquear durante o foco</Text>
+
+          {Platform.OS !== 'android' ? (
+            <View style={styles.blockerDisabledCard}>
+              <Text style={styles.blockerDisabledText}>Disponível apenas no Android.</Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.blockerStatusCard}>
+                <View style={styles.blockerStatusLeft}>
+                  {accessibilityEnabled ? (
+                    <ShieldCheck color={theme.colors.accent} size={20} />
+                  ) : (
+                    <Shield color={theme.colors.textMuted} size={20} />
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.blockerStatusTitle}>
+                      {accessibilityEnabled ? 'Acessibilidade ativa' : 'Acessibilidade desativada'}
+                    </Text>
+                    <Text style={styles.blockerStatusSubtitle}>
+                      Necessário para bloquear apps durante o foco.
+                    </Text>
+                  </View>
+                </View>
+                <PressableScale
+                  style={styles.blockerStatusButton}
+                  onPress={() => { void openAccessibilitySettings(); }}
+                >
+                  <Text style={styles.blockerStatusButtonText}>
+                    {accessibilityEnabled ? 'Gerenciar' : 'Ativar'}
+                  </Text>
+                </PressableScale>
+              </View>
+
+              <View style={styles.blockerSearchRow}>
+                <Search color={theme.colors.textMuted} size={16} />
+                <TextInput
+                  style={styles.blockerSearchInput}
+                  placeholder="Buscar apps..."
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={appSearch}
+                  onChangeText={setAppSearch}
+                />
+                <Text style={styles.blockerCount}>{blockedApps.length} selecionados</Text>
+              </View>
+
+              <View style={styles.blockerAppsList}>
+                {appsLoading ? (
+                  <View style={styles.blockerLoading}>
+                    <ActivityIndicator color={theme.colors.accent} />
+                    <Text style={styles.blockerHint}>Carregando apps...</Text>
+                  </View>
+                ) : appsError ? (
+                  <Text style={styles.blockerError}>{appsError}</Text>
+                ) : (
+                  <>
+                    {visibleApps.map((app) => {
+                      const selected = blockedSet.has(app.packageName);
+                      return (
+                        <Pressable
+                          key={app.packageName}
+                          onPress={() => toggleBlockedApp(app.packageName)}
+                          style={[styles.blockerAppRow, selected && styles.blockerAppRowActive]}
+                        >
+                          <View style={styles.blockerAppInfo}>
+                            <Text style={styles.blockerAppName}>{app.label}</Text>
+                            <Text style={styles.blockerAppPackage}>{app.packageName}</Text>
+                          </View>
+                          <View style={[styles.blockerCheck, selected && styles.blockerCheckActive]}>
+                            {selected && <Check color={theme.colors.accentDark} size={14} />}
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                    {filteredApps.length === 0 && (
+                      <Text style={styles.blockerEmptyText}>Nenhum app encontrado.</Text>
+                    )}
+                    {filteredApps.length > visibleApps.length && (
+                      <Text style={styles.blockerHint}>
+                        Mostrando {visibleApps.length} de {filteredApps.length}. Refine sua busca.
+                      </Text>
+                    )}
+                  </>
+                )}
+              </View>
+            </>
+          )}
+        </View>
         
         {/* Cycles Section */}
         <View style={styles.section}>
@@ -523,14 +689,14 @@ export default function SettingsScreen() {
                     const value = Number(rouletteInput);
                     if (!Number.isNaN(value)) {
                       setRouletteExtraSpins(value);
-                      setRouletteInput(String(Math.max(0, Math.min(value, 5))));
-                    } else {
-                      setRouletteInput(String(rouletteExtraSpins));
-                    }
-                  }}
-                />
-              </View>
-              <Text style={styles.goalHint}>Entre 0 e 5 giros extras</Text>
+                    setRouletteInput(String(Math.max(0, Math.min(value, 1))));
+                  } else {
+                    setRouletteInput(String(rouletteExtraSpins));
+                  }
+                }}
+              />
+            </View>
+              <Text style={styles.goalHint}>Entre 0 e 1 giro extra</Text>
             </View>
 
             <View style={styles.addRewardContainer}>
@@ -830,6 +996,149 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     backgroundColor: theme.colors.surfaceSoft,
     borderWidth: 1,
     borderColor: theme.colors.border,
+  },
+  blockerDisabledCard: {
+    marginTop: 16,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  blockerDisabledText: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+  },
+  blockerStatusCard: {
+    marginTop: 16,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  blockerStatusLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  blockerStatusTitle: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  blockerStatusSubtitle: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  blockerStatusButton: {
+    backgroundColor: theme.colors.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  blockerStatusButtonText: {
+    color: theme.colors.accentDark,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  blockerSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  blockerSearchInput: {
+    flex: 1,
+    color: theme.colors.text,
+    fontSize: 14,
+  },
+  blockerCount: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  blockerAppsList: {
+    marginTop: 12,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  blockerLoading: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 16,
+  },
+  blockerAppRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  blockerAppRowActive: {
+    backgroundColor: 'rgba(231, 184, 74, 0.08)',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+  },
+  blockerAppInfo: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  blockerAppName: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  blockerAppPackage: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  blockerCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  blockerCheckActive: {
+    backgroundColor: theme.colors.accent,
+    borderColor: theme.colors.accent,
+  },
+  blockerEmptyText: {
+    color: theme.colors.textMuted,
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+  blockerHint: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  blockerError: {
+    color: theme.colors.danger,
+    fontSize: 12,
+    textAlign: 'center',
+    paddingVertical: 12,
   },
   card: {
     backgroundColor: theme.colors.surface,

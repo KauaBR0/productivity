@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { CYCLES as DEFAULT_CYCLES, REWARDS as DEFAULT_REWARDS, CycleDef } from '../constants/FocusConfig';
 import { defaultThemeName, ThemeName, themes } from '../constants/theme';
+import { setBlocklist } from '@/services/AppBlockerService';
 
 export interface SettingsContextType {
   cycles: CycleDef[];
@@ -22,6 +24,8 @@ export interface SettingsContextType {
   setLofiTrack: (track: 'random' | 'lofi1' | 'lofi2' | 'off') => void;
   rouletteExtraSpins: number;
   setRouletteExtraSpins: (count: number) => void;
+  blockedApps: string[];
+  setBlockedApps: (packages: string[]) => void;
   isLoading: boolean;
 }
 
@@ -34,7 +38,8 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const [dailyGoalMinutes, setDailyGoalMinutesState] = useState(60);
   const [alarmSound, setAlarmSoundState] = useState<'alarm' | 'silent'>('alarm');
   const [lofiTrack, setLofiTrackState] = useState<'random' | 'lofi1' | 'lofi2' | 'off'>('random');
-  const [rouletteExtraSpins, setRouletteExtraSpinsState] = useState(2);
+  const [rouletteExtraSpins, setRouletteExtraSpinsState] = useState(1);
+  const [blockedApps, setBlockedAppsState] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load settings on mount
@@ -48,6 +53,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         const storedAlarmSound = await AsyncStorage.getItem('user_alarm_sound');
         const storedLofi = await AsyncStorage.getItem('user_lofi_track');
         const storedRouletteSpins = await AsyncStorage.getItem('user_roulette_spins');
+        const storedBlockedApps = await AsyncStorage.getItem('user_blocked_apps');
 
         if (storedCycles) {
           const parsed = JSON.parse(storedCycles) as CycleDef[];
@@ -82,7 +88,13 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         if (storedRouletteSpins) {
           const parsed = Number(storedRouletteSpins);
           if (!Number.isNaN(parsed)) {
-            setRouletteExtraSpinsState(Math.max(0, Math.min(parsed, 5)));
+            setRouletteExtraSpinsState(Math.max(0, Math.min(parsed, 1)));
+          }
+        }
+        if (storedBlockedApps) {
+          const parsed = JSON.parse(storedBlockedApps) as string[];
+          if (Array.isArray(parsed)) {
+            setBlockedAppsState(parsed.filter(Boolean));
           }
         }
       } catch (error) {
@@ -153,6 +165,19 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const saveBlockedApps = async (packages: string[]) => {
+    try {
+      await AsyncStorage.setItem('user_blocked_apps', JSON.stringify(packages));
+    } catch (error) {
+      console.error('Failed to save blocked apps:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    void setBlocklist(blockedApps);
+  }, [blockedApps]);
+
   const updateCycle = (updatedCycle: CycleDef) => {
     const newCycles = cycles.map((c) => 
       c.id === updatedCycle.id ? updatedCycle : c
@@ -185,14 +210,16 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     setDailyGoalMinutesState(60);
     setAlarmSoundState('alarm');
     setLofiTrackState('random');
-    setRouletteExtraSpinsState(2);
+    setRouletteExtraSpinsState(1);
+    setBlockedAppsState([]);
     saveCycles(DEFAULT_CYCLES);
     saveRewards(DEFAULT_REWARDS);
     saveTheme(defaultThemeName);
     saveDailyGoal(60);
     saveAlarmSound('alarm');
     saveLofiTrack('random');
-    saveRouletteSpins(2);
+    saveRouletteSpins(1);
+    saveBlockedApps([]);
   };
 
   const setThemeName = (nextTheme: ThemeName) => {
@@ -217,9 +244,15 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const setRouletteExtraSpins = (count: number) => {
-    const safeCount = Math.max(0, Math.min(count, 5));
+    const safeCount = Math.max(0, Math.min(count, 1));
     setRouletteExtraSpinsState(safeCount);
     saveRouletteSpins(safeCount);
+  };
+
+  const setBlockedApps = (packages: string[]) => {
+    const normalized = Array.from(new Set(packages.filter(Boolean)));
+    setBlockedAppsState(normalized);
+    saveBlockedApps(normalized);
   };
 
   return (
@@ -243,6 +276,8 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         setLofiTrack,
         rouletteExtraSpins,
         setRouletteExtraSpins,
+        blockedApps,
+        setBlockedApps,
         isLoading 
       }}
     >

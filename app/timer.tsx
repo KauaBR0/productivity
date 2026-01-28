@@ -13,6 +13,7 @@ import { useGamification } from '@/context/GamificationContext';
 import { X, Play, Pause, Gift, Brain, Coffee, Clock, Volume2 } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
 import { startForegroundTimer, stopForegroundTimer, updateForegroundTimer } from '@/services/ForegroundTimerService';
+import { setSessionActive } from '@/services/AppBlockerService';
 import RewardRoulette from '@/components/RewardRoulette';
 
 const { width } = Dimensions.get('window');
@@ -107,6 +108,7 @@ export default function TimerScreen() {
   // One More Feature State
   const [showOneMoreModal, setShowOneMoreModal] = useState(false);
   const [showRewardEndModal, setShowRewardEndModal] = useState(false);
+  const [showRestEndModal, setShowRestEndModal] = useState(false);
   const [accumulatedFocusTime, setAccumulatedFocusTime] = useState(cycle ? cycle.focusDuration : 0);
   const [accumulatedRewardTime, setAccumulatedRewardTime] = useState(cycle ? cycle.rewardDuration : 0);
   const [isDeepFocus, setIsDeepFocus] = useState(false);
@@ -114,6 +116,7 @@ export default function TimerScreen() {
   const [isLofiMuted, setIsLofiMuted] = useState(false);
   const [recentRewards, setRecentRewards] = useState<string[]>([]);
   const lastForegroundUpdateRef = useRef(0);
+  const lastBlockerActiveRef = useRef<boolean | null>(null);
   
   // Animation State
   const [totalDuration, setTotalDuration] = useState(
@@ -223,6 +226,22 @@ export default function TimerScreen() {
       }
     };
   }, [phase, isActive, showOneMoreModal, setIsFocusing]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const nextActive =
+      phase === 'focus' && isActive && !showOneMoreModal && !showRewardEndModal && !showRestEndModal;
+    if (lastBlockerActiveRef.current === nextActive) return;
+    lastBlockerActiveRef.current = nextActive;
+    void setSessionActive(nextActive);
+  }, [phase, isActive, showOneMoreModal, showRewardEndModal, showRestEndModal]);
+
+  useEffect(() => {
+    return () => {
+      if (Platform.OS !== 'android') return;
+      void setSessionActive(false);
+    };
+  }, []);
 
   useEffect(() => {
     if (phase !== 'focus' && isDeepFocus) {
@@ -335,7 +354,7 @@ export default function TimerScreen() {
   }, []);
 
   const playLofi = useCallback(async () => {
-    if (phase !== 'focus' || !isActive || showOneMoreModal || showRewardEndModal) return;
+    if (phase !== 'focus' || !isActive || showOneMoreModal || showRewardEndModal || showRestEndModal) return;
     if (lofiTrack === 'off') return;
     if (isLofiMuted) return;
     if (lofiSoundRef.current) return;
@@ -352,15 +371,15 @@ export default function TimerScreen() {
     } catch (error) {
       console.log('Error playing lofi', error);
     }
-  }, [phase, isActive, showOneMoreModal, showRewardEndModal, lofiTrack, isLofiMuted]);
+  }, [phase, isActive, showOneMoreModal, showRewardEndModal, showRestEndModal, lofiTrack, isLofiMuted]);
 
   useEffect(() => {
-    if (phase === 'focus' && isActive && !showOneMoreModal && !showRewardEndModal && !isLofiMuted) {
+    if (phase === 'focus' && isActive && !showOneMoreModal && !showRewardEndModal && !showRestEndModal && !isLofiMuted) {
       void playLofi();
     } else {
       void stopLofi();
     }
-  }, [phase, isActive, showOneMoreModal, showRewardEndModal, isLofiMuted, playLofi, stopLofi]);
+  }, [phase, isActive, showOneMoreModal, showRewardEndModal, showRestEndModal, isLofiMuted, playLofi, stopLofi]);
 
   useEffect(() => {
     return () => {
@@ -508,9 +527,15 @@ export default function TimerScreen() {
     setEndTime(null);
     void cancelScheduledNotification();
 
-    if (isInfiniteCycle && (phase === 'reward' || phase === 'rest')) {
+    if (isInfiniteCycle && phase === 'reward') {
       playAlarm();
       Vibration.vibrate([0, 500, 200, 500]);
+      return;
+    }
+    if (isInfiniteCycle && phase === 'rest') {
+      playAlarm();
+      Vibration.vibrate([0, 500, 200, 500]);
+      setShowRestEndModal(true);
       return;
     }
 
@@ -577,14 +602,19 @@ export default function TimerScreen() {
       await cancelScheduledNotification();
   };
 
-  const handleExtendReward = async (minutes: number) => {
-      setShowRewardEndModal(false);
+  const handleExtendRest = async (minutes: number) => {
+      setShowRestEndModal(false);
       const extraSeconds = Math.max(1, Math.round(minutes * 60));
       setTimeLeft(extraSeconds);
       setTotalDuration(extraSeconds);
       setEndTime(Date.now() + extraSeconds * 1000);
       setIsActive(true);
       await cancelScheduledNotification();
+  };
+
+  const handleFinishRest = async () => {
+      setShowRestEndModal(false);
+      await startInfiniteFocus();
   };
 
   const handleOneMore = (focusAdd: number, rewardAdd: number) => {
@@ -693,24 +723,24 @@ export default function TimerScreen() {
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
-    const shouldRun = isActive && phase !== 'selection' && !showOneMoreModal && !showRewardEndModal;
+    const shouldRun = isActive && phase !== 'selection' && !showOneMoreModal && !showRewardEndModal && !showRestEndModal;
     if (!shouldRun) {
       void stopForegroundTimer();
       return;
     }
     const { title, desc } = getForegroundStatus();
     void startForegroundTimer(title, desc);
-  }, [isActive, phase, showOneMoreModal, showRewardEndModal, getForegroundStatus]);
+  }, [isActive, phase, showOneMoreModal, showRewardEndModal, showRestEndModal, getForegroundStatus]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
-    if (!isActive || phase === 'selection' || showOneMoreModal || showRewardEndModal) return;
+    if (!isActive || phase === 'selection' || showOneMoreModal || showRewardEndModal || showRestEndModal) return;
     const now = Date.now();
     if (now - lastForegroundUpdateRef.current < 15000) return;
     lastForegroundUpdateRef.current = now;
     const { title, desc } = getForegroundStatus();
     void updateForegroundTimer(title, desc);
-  }, [timeLeft, phase, isActive, showOneMoreModal, showRewardEndModal, getForegroundStatus]);
+  }, [timeLeft, phase, isActive, showOneMoreModal, showRewardEndModal, showRestEndModal, getForegroundStatus]);
 
   useEffect(() => {
     return () => {
@@ -738,6 +768,13 @@ export default function TimerScreen() {
           onPress: async () => {
             shouldPersistRef.current = false;
             shouldKeepFocusRef.current = false;
+            if (isInfiniteCycle && phase === 'focus' && cycle) {
+              const focusSeconds = Math.max(0, getFocusElapsedSeconds());
+              if (focusSeconds > 0) {
+                const startedAt = Date.now() - focusSeconds * 1000;
+                await processCycleCompletion(focusSeconds / 60, startedAt, cycle.label);
+              }
+            }
             await clearTimerState();
             await stopForegroundTimer();
             await cancelScheduledNotification();
@@ -814,7 +851,7 @@ export default function TimerScreen() {
 
   const CurrentIcon = phaseConfig[phase].icon;
   const currentTheme = phaseConfig[phase];
-  const deepFocusEnabled = isDeepFocus && phase === 'focus' && !showOneMoreModal && !showRewardEndModal;
+  const deepFocusEnabled = isDeepFocus && phase === 'focus' && !showOneMoreModal && !showRewardEndModal && !showRestEndModal;
   const canToggleTimer = !(isInfiniteCycle && phase !== 'focus' && timeLeft === 0);
   const instructionText = isInfiniteCycle && phase === 'focus'
     ? (isActive ? 'Foco contínuo' : 'Pausado')
@@ -829,13 +866,13 @@ export default function TimerScreen() {
         onComplete={(reward) =>
           startReward(reward, isInfiniteCycle ? pendingRewardSeconds ?? undefined : undefined)
         }
-        rewardDuration={rouletteRewardMinutes}
-        rewards={rewards}
-        extraSpins={rouletteExtraSpins}
-        recentRewards={recentRewards}
-        theme={theme}
-      />
-    );
+          rewardDuration={rouletteRewardMinutes}
+          rewards={rewards}
+          extraSpins={rouletteExtraSpins}
+          recentRewards={recentRewards}
+          theme={theme}
+        />
+      );
   }
 
   // Render Timer Phases (Focus, Reward, Rest)
@@ -1101,6 +1138,78 @@ export default function TimerScreen() {
         </View>
       </Modal>
 
+      {/* Rest End Modal */}
+      <Modal
+        visible={showRestEndModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Coffee color="#FF4500" size={32} />
+              <Text style={styles.modalTitle}>Descanso finalizado!</Text>
+            </View>
+            <Text style={styles.modalDescription}>
+              Quer estender o seu descanso antes de voltar ao foco?
+            </Text>
+
+            <Text style={styles.optionsTitle}>Prolongar descanso</Text>
+            <View style={styles.optionsGrid}>
+              <TouchableOpacity
+                style={styles.optionCard}
+                onPress={() => handleExtendRest(5)}
+                activeOpacity={0.85}
+              >
+                <View>
+                  <Text style={styles.optionTitle}>+5 min</Text>
+                  <Text style={styles.optionSubtitle}>Recuperacao rapida</Text>
+                </View>
+                <View style={styles.optionBadge}>
+                  <Text style={styles.optionBadgeText}>Continuar</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.optionCard}
+                onPress={() => handleExtendRest(10)}
+                activeOpacity={0.85}
+              >
+                <View>
+                  <Text style={styles.optionTitle}>+10 min</Text>
+                  <Text style={styles.optionSubtitle}>Pausa completa</Text>
+                </View>
+                <View style={styles.optionBadge}>
+                  <Text style={styles.optionBadgeText}>Continuar</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.optionCard}
+                onPress={() => handleExtendRest(15)}
+                activeOpacity={0.85}
+              >
+                <View>
+                  <Text style={styles.optionTitle}>+15 min</Text>
+                  <Text style={styles.optionSubtitle}>Descanso longo</Text>
+                </View>
+                <View style={styles.optionBadge}>
+                  <Text style={styles.optionBadgeText}>Continuar</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.finishButton, { backgroundColor: '#FF4500' }]}
+              onPress={handleFinishRest}
+            >
+              <Text style={styles.actionButtonText}>Voltar ao foco</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Reward End Modal */}
       <Modal
         visible={showRewardEndModal}
@@ -1118,58 +1227,12 @@ export default function TimerScreen() {
               Sua recompensa chegou ao fim.
             </Text>
             {isInfiniteCycle ? (
-              <>
-                <Text style={styles.optionsTitle}>Prolongar recompensa</Text>
-                <View style={styles.optionsGrid}>
-                  <TouchableOpacity
-                    style={styles.optionCard}
-                    onPress={() => handleExtendReward(5)}
-                    activeOpacity={0.85}
-                  >
-                    <View>
-                      <Text style={styles.optionTitle}>+5 min</Text>
-                      <Text style={styles.optionSubtitle}>Pausa rápida</Text>
-                    </View>
-                    <View style={styles.optionBadge}>
-                      <Text style={styles.optionBadgeText}>Continuar</Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.optionCard}
-                    onPress={() => handleExtendReward(10)}
-                    activeOpacity={0.85}
-                  >
-                    <View>
-                      <Text style={styles.optionTitle}>+10 min</Text>
-                      <Text style={styles.optionSubtitle}>Relaxar um pouco</Text>
-                    </View>
-                    <View style={styles.optionBadge}>
-                      <Text style={styles.optionBadgeText}>Continuar</Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.optionCard}
-                    onPress={() => handleExtendReward(15)}
-                    activeOpacity={0.85}
-                  >
-                    <View>
-                      <Text style={styles.optionTitle}>+15 min</Text>
-                      <Text style={styles.optionSubtitle}>Recompensa longa</Text>
-                    </View>
-                    <View style={styles.optionBadge}>
-                      <Text style={styles.optionBadgeText}>Continuar</Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.finishButton, { backgroundColor: '#FF4500' }]}
-                  onPress={handleStopReward}
-                >
-                  <Text style={styles.actionButtonText}>Ir para descanso</Text>
-                </TouchableOpacity>
-              </>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.finishButton, { backgroundColor: '#FF4500' }]}
+                onPress={handleStopReward}
+              >
+                <Text style={styles.actionButtonText}>Ir para descanso</Text>
+              </TouchableOpacity>
             ) : (
               <TouchableOpacity
                 style={[styles.actionButton, styles.finishButton, { backgroundColor: '#FF4500' }]}
