@@ -140,7 +140,9 @@ export const GamificationProvider = ({ children }: { children: ReactNode }) => {
       }
   };
 
-  const processCycleCompletion = async (minutes: number, startedAt: number, label: string) => {
+  const processCycleCompletion = async (rawMinutes: number, startedAt: number, label: string) => {
+    const minutes = Math.ceil(rawMinutes); // Normalize to integer for consistency
+
     // Calculate Streak
     const now = new Date();
     const today = getDateKey(now); // YYYY-MM-DD
@@ -217,7 +219,7 @@ export const GamificationProvider = ({ children }: { children: ReactNode }) => {
             // Insert Session
             const { error: sessionError } = await supabase.from('focus_sessions').insert({
                 user_id: user.id,
-                minutes: Number(minutes.toFixed(2)),
+                minutes: minutes,
                 started_at: new Date(startedAt).toISOString(),
                 completed_at: new Date().toISOString(),
                 label: label,
