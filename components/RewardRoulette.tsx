@@ -98,7 +98,7 @@ export default function RewardRoulette({
 }: RewardRouletteProps) {
   const [selectedReward, setSelectedReward] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [spinsLeft, setSpinsLeft] = useState(() => Math.max(1, 1 + extraSpins));
+  const [spinsLeft, setSpinsLeft] = useState(extraSpins);
   
   const scrollY = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<Animated.FlatList<any>>(null);
@@ -126,7 +126,7 @@ export default function RewardRoulette({
   }, [startOffset, scrollAnim]);
 
   useEffect(() => {
-    setSpinsLeft(Math.max(1, 1 + extraSpins));
+    setSpinsLeft(extraSpins);
   }, [extraSpins]);
 
   // --- Lógica de Girar ---
