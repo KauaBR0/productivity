@@ -34,14 +34,19 @@ class BlockerAccessibilityService : AccessibilityService() {
   }
 
   private fun launchBlockScreen(blockedPackage: String) {
-    val intent = Intent(this, BlockScreenActivity::class.java).apply {
-      addFlags(
-          Intent.FLAG_ACTIVITY_NEW_TASK or
-              Intent.FLAG_ACTIVITY_CLEAR_TOP or
-              Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
-      )
-      putExtra(BlockScreenActivity.EXTRA_BLOCKED_PACKAGE, blockedPackage)
+    try {
+      val intent = Intent(this, BlockScreenActivity::class.java).apply {
+        addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+        )
+        putExtra(BlockScreenActivity.EXTRA_BLOCKED_PACKAGE, blockedPackage)
+      }
+      startActivity(intent)
+    } catch (e: Exception) {
+      e.printStackTrace()
+      // Opcional: Logar no Logcat para debug: Log.e("BlockerService", "Failed to launch block screen", e)
     }
-    startActivity(intent)
   }
 }

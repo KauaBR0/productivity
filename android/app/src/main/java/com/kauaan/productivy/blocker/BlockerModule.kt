@@ -94,6 +94,29 @@ class BlockerModule(private val reactContext: ReactApplicationContext) :
     promise.resolve(enabled)
   }
 
+  @ReactMethod
+  fun checkOverlayPermission(promise: Promise) {
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+      promise.resolve(Settings.canDrawOverlays(reactContext))
+    } else {
+      promise.resolve(true)
+    }
+  }
+
+  @ReactMethod
+  fun requestOverlayPermission() {
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+      if (!Settings.canDrawOverlays(reactContext)) {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            android.net.Uri.parse("package:" + reactContext.packageName)
+        )
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        reactContext.startActivity(intent)
+      }
+    }
+  }
+
   private fun isServiceEnabled(context: ReactApplicationContext, serviceId: String): Boolean {
     val enabledServices =
         Settings.Secure.getString(

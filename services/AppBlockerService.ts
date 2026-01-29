@@ -37,6 +37,16 @@ export const isAccessibilityEnabled = async (): Promise<boolean> => {
   return BlockerModule.isAccessibilityEnabled();
 };
 
+export const checkOverlayPermission = async (): Promise<boolean> => {
+  if (!isAndroid || !BlockerModule?.checkOverlayPermission) return true;
+  return BlockerModule.checkOverlayPermission();
+};
+
+export const requestOverlayPermission = async () => {
+  if (!isAndroid || !BlockerModule?.requestOverlayPermission) return;
+  BlockerModule.requestOverlayPermission();
+};
+
 export const getAttemptStats = async (): Promise<AttemptStats> => {
   if (!isAndroid || !BlockerModule?.getAttemptStats) {
     return {
