@@ -215,13 +215,18 @@ export const GamificationProvider = ({ children }: { children: ReactNode }) => {
     if (user) {
         try {
             // Insert Session
-            await supabase.from('focus_sessions').insert({
+            const { error: sessionError } = await supabase.from('focus_sessions').insert({
                 user_id: user.id,
-                minutes: minutes,
+                minutes: Number(minutes.toFixed(2)),
                 started_at: new Date(startedAt).toISOString(),
                 completed_at: new Date().toISOString(),
                 label: label,
             });
+
+            if (sessionError) {
+                console.error('Supabase session insert error:', sessionError);
+                Alert.alert('Erro de Sincronização', `Não foi possível salvar sua sessão: ${sessionError.message}`);
+            }
 
             // Update Profile Stats
             await supabase.from('profiles').update({
