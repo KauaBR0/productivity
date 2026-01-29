@@ -141,7 +141,7 @@ export const GamificationProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const processCycleCompletion = async (rawMinutes: number, startedAt: number, label: string) => {
-    const minutes = Math.ceil(rawMinutes); // Normalize to integer for consistency
+    const minutes = Number(rawMinutes.toFixed(2)); // Use precise float (e.g. 2.50 min)
 
     // Calculate Streak
     const now = new Date();

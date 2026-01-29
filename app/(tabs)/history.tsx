@@ -102,7 +102,7 @@ export default function HistoryScreen() {
                 </Text>
             </View>
             <View style={styles.durationBadge}>
-                <Text style={styles.durationText}>{item.minutes} min</Text>
+                <Text style={styles.durationText}>{Number(item.minutes).toFixed(2).replace(/\.00$/, '')} min</Text>
             </View>
         </View>
       </View>
