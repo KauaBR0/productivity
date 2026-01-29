@@ -70,7 +70,7 @@ export default function RootLayout() {
               <Stack.Screen name="search" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="friends" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="contacts-sync" options={{ animation: 'slide_from_right' }} />
-              <Stack.Screen name="groups" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="groups/index" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="groups/create" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="groups/[id]" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="groups/ranking" options={{ animation: 'slide_from_right' }} />
