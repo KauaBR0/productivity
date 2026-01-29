@@ -12,7 +12,7 @@ export interface RankingUser {
 
 export const formatTimeDisplay = (totalMinutes: number) => {
     const hours = Math.floor(totalMinutes / 60);
-    const mins = totalMinutes % 60;
+    const mins = Math.round(totalMinutes % 60);
     return `${hours.toString().padStart(2, '0')}h ${mins.toString().padStart(2, '0')}min`;
 };
 

@@ -219,6 +219,7 @@ export const GamificationProvider = ({ children }: { children: ReactNode }) => {
                 user_id: user.id,
                 minutes: minutes,
                 started_at: new Date(startedAt).toISOString(),
+                completed_at: new Date().toISOString(),
                 label: label,
             });
 
