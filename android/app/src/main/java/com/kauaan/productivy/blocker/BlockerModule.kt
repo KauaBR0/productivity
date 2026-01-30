@@ -9,6 +9,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
+import com.facebook.react.bridge.ReadableType
 
 import android.util.Log
 
@@ -32,9 +33,11 @@ class BlockerModule(private val reactContext: ReactApplicationContext) :
     try {
         val set = mutableSetOf<String>()
         for (i in 0 until packages.size()) {
-          val value = packages.getString(i)
-          if (!value.isNullOrBlank()) {
-            set.add(value)
+          if (packages.getType(i) == ReadableType.String) {
+             val value = packages.getString(i)
+             if (!value.isNullOrBlank()) {
+               set.add(value)
+             }
           }
         }
         BlockerPrefs.setBlocklist(reactContext, set)

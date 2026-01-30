@@ -18,34 +18,55 @@ object BlockerPrefs {
   private fun prefs(context: Context): SharedPreferences =
       context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-  fun isSessionActive(context: Context): Boolean =
-      prefs(context).getBoolean(KEY_SESSION_ACTIVE, false)
+  fun isSessionActive(context: Context): Boolean {
+      return try {
+          prefs(context).getBoolean(KEY_SESSION_ACTIVE, false)
+      } catch (e: Exception) {
+          false
+      }
+  }
 
   fun setSessionActive(context: Context, active: Boolean) {
-    prefs(context).edit().putBoolean(KEY_SESSION_ACTIVE, active).apply()
+      try {
+          prefs(context).edit().putBoolean(KEY_SESSION_ACTIVE, active).apply()
+      } catch (e: Exception) {
+          e.printStackTrace()
+      }
   }
 
   fun getBlocklist(context: Context): Set<String> {
-    val stored = prefs(context).getStringSet(KEY_BLOCKLIST, emptySet())
-    return stored?.toSet() ?: emptySet()
+      return try {
+          val stored = prefs(context).getStringSet(KEY_BLOCKLIST, emptySet())
+          stored?.toSet() ?: emptySet()
+      } catch (e: Exception) {
+          emptySet()
+      }
   }
 
   fun setBlocklist(context: Context, packages: Set<String>) {
-    prefs(context).edit().putStringSet(KEY_BLOCKLIST, packages).apply()
+      try {
+          prefs(context).edit().putStringSet(KEY_BLOCKLIST, packages).apply()
+      } catch (e: Exception) {
+          e.printStackTrace()
+      }
   }
 
   fun recordAttempt(context: Context, packageName: String) {
-    val prefs = prefs(context)
-    val today = dateStamp(System.currentTimeMillis())
-    val lastDate = prefs.getString(KEY_ATTEMPT_DATE, null)
-    val currentCount =
-        if (lastDate == today) prefs.getInt(KEY_ATTEMPT_COUNT, 0) else 0
-    prefs.edit()
-        .putString(KEY_ATTEMPT_DATE, today)
-        .putInt(KEY_ATTEMPT_COUNT, currentCount + 1)
-        .putString(KEY_LAST_ATTEMPT_PACKAGE, packageName)
-        .putLong(KEY_LAST_ATTEMPT_TIME, System.currentTimeMillis())
-        .apply()
+    try {
+        val prefs = prefs(context)
+        val today = dateStamp(System.currentTimeMillis())
+        val lastDate = prefs.getString(KEY_ATTEMPT_DATE, null)
+        val currentCount =
+            if (lastDate == today) prefs.getInt(KEY_ATTEMPT_COUNT, 0) else 0
+        prefs.edit()
+            .putString(KEY_ATTEMPT_DATE, today)
+            .putInt(KEY_ATTEMPT_COUNT, currentCount + 1)
+            .putString(KEY_LAST_ATTEMPT_PACKAGE, packageName)
+            .putLong(KEY_LAST_ATTEMPT_TIME, System.currentTimeMillis())
+            .apply()
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
   }
 
   fun getAttemptCount(context: Context): Int =
