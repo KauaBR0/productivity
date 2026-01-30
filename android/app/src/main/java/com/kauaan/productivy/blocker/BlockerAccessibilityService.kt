@@ -5,18 +5,31 @@ import android.content.Intent
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 
+import android.util.Log
+
 class BlockerAccessibilityService : AccessibilityService() {
   private var lastBlockedPackage: String? = null
   private var lastBlockTimestamp = 0L
+
+  override fun onServiceConnected() {
+    super.onServiceConnected()
+    Log.d("AppBlocker", "Service Connected")
+  }
 
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
     if (event == null) return
     if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
     val packageName = event.packageName?.toString() ?: return
+    
+    // Log.d("AppBlocker", "Event detected from: $packageName") // Uncomment if very verbose needed
+
     if (packageName == this.packageName) return
     if (!BlockerPrefs.isSessionActive(this)) return
+    
     val blocklist = BlockerPrefs.getBlocklist(this)
     if (!blocklist.contains(packageName)) return
+
+    Log.d("AppBlocker", "Blocking package: $packageName")
 
     val now = SystemClock.elapsedRealtime()
     if (packageName == lastBlockedPackage && now - lastBlockTimestamp < 1200) {
@@ -46,7 +59,7 @@ class BlockerAccessibilityService : AccessibilityService() {
       startActivity(intent)
     } catch (e: Exception) {
       e.printStackTrace()
-      // Opcional: Logar no Logcat para debug: Log.e("BlockerService", "Failed to launch block screen", e)
+      Log.e("AppBlocker", "CRITICAL FAILURE launching block screen", e)
     }
   }
 }

@@ -10,25 +10,37 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
 
+import android.util.Log
+
 class BlockerModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
   override fun getName(): String = "AppBlocker"
 
   @ReactMethod
   fun setSessionActive(active: Boolean) {
-    BlockerPrefs.setSessionActive(reactContext, active)
+    Log.d("AppBlocker", "setSessionActive called with: $active")
+    try {
+        BlockerPrefs.setSessionActive(reactContext, active)
+    } catch (e: Exception) {
+        Log.e("AppBlocker", "Error in setSessionActive", e)
+    }
   }
 
   @ReactMethod
   fun setBlocklist(packages: ReadableArray) {
-    val set = mutableSetOf<String>()
-    for (i in 0 until packages.size()) {
-      val value = packages.getString(i)
-      if (!value.isNullOrBlank()) {
-        set.add(value)
-      }
+    Log.d("AppBlocker", "setBlocklist called with ${packages.size()} items")
+    try {
+        val set = mutableSetOf<String>()
+        for (i in 0 until packages.size()) {
+          val value = packages.getString(i)
+          if (!value.isNullOrBlank()) {
+            set.add(value)
+          }
+        }
+        BlockerPrefs.setBlocklist(reactContext, set)
+    } catch (e: Exception) {
+        Log.e("AppBlocker", "Error in setBlocklist", e)
     }
-    BlockerPrefs.setBlocklist(reactContext, set)
   }
 
   @ReactMethod
