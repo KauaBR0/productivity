@@ -1,13 +1,15 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, Platform, Pressable, Animated, StyleProp, ViewStyle, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CycleDef } from '@/constants/FocusConfig';
 import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
 import { useGamification } from '@/context/GamificationContext';
-import { Play, Settings, Plus, Edit2, Sparkles, BarChart3 } from 'lucide-react-native';
+import { Play, Settings, Plus, Edit2, Sparkles, BarChart3, RotateCcw } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import { Theme } from '@/constants/theme';
+import { ACTIVE_TIMER_STORAGE_KEY, StoredTimerState } from '../timer';
 
 const PressableScale = ({
   onPress,
@@ -59,6 +61,29 @@ export default function HomeScreen() {
     if (Number.isInteger(value)) return String(value);
     return value.toFixed(2).replace('.', ',');
   };
+
+  const [activeTimerState, setActiveTimerState] = useState<StoredTimerState | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      const checkActiveTimer = async () => {
+        try {
+          const raw = await AsyncStorage.getItem(ACTIVE_TIMER_STORAGE_KEY);
+          if (raw) {
+            const state = JSON.parse(raw);
+            setActiveTimerState(state);
+          } else {
+            setActiveTimerState(null);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      };
+      checkActiveTimer();
+    }, [])
+  );
+
+  const activeTimerCycle = activeTimerState ? cycles.find(c => c.id === activeTimerState.cycleId) : null;
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -133,6 +158,28 @@ export default function HomeScreen() {
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* Resume Active Session Banner */}
+          {activeTimerState && (
+            <PressableScale
+              style={styles.resumeBanner}
+              onPress={() => router.push({ pathname: '/timer', params: { cycleId: activeTimerState.cycleId } })}
+            >
+              <View style={styles.resumeIcon}>
+                <RotateCcw color="#000" size={20} />
+              </View>
+              <View style={styles.resumeInfo}>
+                <Text style={styles.resumeLabel}>Sessão em andamento</Text>
+                <Text style={styles.resumeTitle}>
+                  {activeTimerCycle?.label || (activeTimerState.isInfiniteCycle ? 'Modo Infinito' : 'Ciclo')}
+                </Text>
+              </View>
+              <View style={styles.resumeAction}>
+                <Text style={styles.resumeActionText}>RETOMAR</Text>
+                <Play size={14} color="#000" fill="#000" />
+              </View>
+            </PressableScale>
+          )}
+
           {/* Hero */}
           {primaryCycle && (
             <View style={styles.heroCard}>
@@ -344,6 +391,61 @@ const createStyles = (theme: Theme) => StyleSheet.create({
       borderColor: theme.colors.border,
   },
   
+  // Resume Banner
+  resumeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.accent, // Gold/Yellow
+    borderRadius: theme.radius.lg,
+    padding: 12,
+    marginBottom: 16, // Space before Hero
+    shadowColor: theme.colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  resumeIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  resumeInfo: {
+    flex: 1,
+  },
+  resumeLabel: {
+    color: theme.colors.accentDark,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    opacity: 0.8,
+  },
+  resumeTitle: {
+    color: '#000',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  resumeAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  resumeActionText: {
+    color: '#000',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+
   // Cards
   scrollContent: {
     paddingBottom: 40,

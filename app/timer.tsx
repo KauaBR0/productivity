@@ -21,12 +21,12 @@ const CIRCLE_SIZE = width * 0.8;
 const STROKE_WIDTH = 15;
 const RADIUS = (CIRCLE_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-const ACTIVE_TIMER_STORAGE_KEY = 'active_timer_state_v1';
+export const ACTIVE_TIMER_STORAGE_KEY = 'active_timer_state_v1';
 
 
-type TimerPhase = 'focus' | 'selection' | 'reward' | 'rest';
+export type TimerPhase = 'focus' | 'selection' | 'reward' | 'rest';
 
-type StoredTimerState = {
+export type StoredTimerState = {
   version: 1;
   cycleId: string;
   phase: TimerPhase;
