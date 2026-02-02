@@ -6,7 +6,7 @@ import { CycleDef } from '@/constants/FocusConfig';
 import { themes, ThemeName, Theme } from '@/constants/theme';
 import { Plus, Trash2, RotateCcw, Volume2, Music2, PhoneCall, X, Shield, ShieldCheck, Search, Check, Infinity as InfinityIcon } from 'lucide-react-native';
 import { Audio } from 'expo-av';
-import { getInstalledApps, isAccessibilityEnabled, isAppBlockerAvailable, openAccessibilitySettings } from '@/services/AppBlockerService';
+import { getInstalledApps, isAccessibilityEnabled, isAppBlockerAvailable, openAccessibilitySettings, InstalledApp } from '@/services/AppBlockerService';
 
 const PressableScale = ({
   onPress,
@@ -44,7 +44,7 @@ export default function SettingsScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const blockerAvailable = isAppBlockerAvailable();
   const [accessibilityEnabled, setAccessibilityEnabled] = useState(false);
-  const [installedApps, setInstalledApps] = useState<{ packageName: string; label: string }[]>([]);
+  const [installedApps, setInstalledApps] = useState<InstalledApp[]>([]);
   const [appsLoading, setAppsLoading] = useState(false);
   const [appsError, setAppsError] = useState<string | null>(null);
   const [appSearch, setAppSearch] = useState('');

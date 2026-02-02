@@ -7,7 +7,7 @@ type AttemptStats = {
   lastAttemptTime: number;
 };
 
-type InstalledApp = {
+export type InstalledApp = {
   packageName: string;
   label: string;
   category?: string;
