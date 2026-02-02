@@ -42,60 +42,29 @@ export const SocialService = {
 
   // Pegar perfil completo de um usuário (com contagens e status de follow)
   async getUserProfile(targetUserId: string, currentUserId: string): Promise<SocialProfile | null> {
-    // 1. Get Profile Data
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('id, username, avatar_url, is_focusing, current_streak, last_focus_date')
-      .eq('id', targetUserId)
-      .single();
+    const { data, error } = await supabase.rpc('get_full_profile', {
+      p_target_id: targetUserId,
+      p_viewer_id: currentUserId,
+    });
 
     if (error) throw error;
+    if (!data || data.length === 0) return null;
 
-    // 2. Get Counts
-    const { count: followersCount } = await supabase
-      .from('follows')
-      .select('*', { count: 'exact', head: true })
-      .eq('following_id', targetUserId);
-
-    const { count: followingCount } = await supabase
-      .from('follows')
-      .select('*', { count: 'exact', head: true })
-      .eq('follower_id', targetUserId);
-
-    // 2.1 Focus stats
-    const { data: sessions, error: sessionsError } = await supabase
-      .from('focus_sessions')
-      .select('minutes')
-      .eq('user_id', targetUserId);
-
-    if (sessionsError) throw sessionsError;
-    const totalMinutes = sessions?.reduce((acc, curr) => acc + curr.minutes, 0) || 0;
-    const totalCycles = sessions?.length || 0;
-
-    // 3. Check if I follow them
-    const { data: followCheck } = await supabase
-      .from('follows')
-      .select('follower_id')
-      .eq('follower_id', currentUserId)
-      .eq('following_id', targetUserId)
-      .single();
-
-    // 4. Check if they follow me
-    const { data: followsMeCheck } = await supabase
-      .from('follows')
-      .select('follower_id')
-      .eq('follower_id', targetUserId)
-      .eq('following_id', currentUserId)
-      .single();
+    const profile = data[0];
 
     return {
-      ...profile,
-      followers_count: followersCount || 0,
-      following_count: followingCount || 0,
-      am_i_following: !!followCheck,
-      follows_me: !!followsMeCheck,
-      total_focus_minutes: totalMinutes,
-      total_cycles: totalCycles,
+      id: profile.id,
+      username: profile.username,
+      avatar_url: profile.avatar_url,
+      is_focusing: profile.is_focusing,
+      current_streak: profile.current_streak,
+      last_focus_date: profile.last_focus_date,
+      followers_count: Number(profile.followers_count),
+      following_count: Number(profile.following_count),
+      total_focus_minutes: Number(profile.total_focus_minutes),
+      total_cycles: Number(profile.total_cycles),
+      am_i_following: profile.am_i_following,
+      follows_me: profile.follows_me,
     };
   },
 
