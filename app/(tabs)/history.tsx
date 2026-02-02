@@ -56,7 +56,8 @@ export default function HistoryScreen() {
         .from('focus_sessions')
         .select('*')
         .eq('user_id', user.id)
-        .order('completed_at', { ascending: false });
+        .order('completed_at', { ascending: false })
+        .limit(50);
 
       if (error) throw error;
       setHistory(data || []);

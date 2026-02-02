@@ -56,6 +56,10 @@ class BlockerModule(private val reactContext: ReactApplicationContext) :
     promise.resolve(map)
   }
 
+import android.content.pm.ApplicationInfo
+
+// ...
+
   @ReactMethod
   fun getInstalledApps(promise: Promise) {
     try {
@@ -64,24 +68,46 @@ class BlockerModule(private val reactContext: ReactApplicationContext) :
         addCategory(Intent.CATEGORY_LAUNCHER)
       }
       val resolveInfos = pm.queryIntentActivities(intent, 0)
-      val appMap = LinkedHashMap<String, String>()
+      
+      // Map: PackageName -> { Label, Category }
+      val appMap = LinkedHashMap<String, Pair<String, String>>()
+      
       resolveInfos.forEach { info ->
         val pkg = info.activityInfo.packageName ?: return@forEach
         if (pkg == reactContext.packageName) return@forEach
+        
         val label = info.loadLabel(pm)?.toString() ?: pkg
+        
         if (!appMap.containsKey(pkg)) {
-          appMap[pkg] = label
+            // Determine Category
+            var category = "Outros"
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                val appInfo = info.activityInfo.applicationInfo
+                category = when (appInfo.category) {
+                    ApplicationInfo.CATEGORY_GAME -> "Jogos"
+                    ApplicationInfo.CATEGORY_AUDIO -> "Música & Áudio"
+                    ApplicationInfo.CATEGORY_VIDEO -> "Vídeo"
+                    ApplicationInfo.CATEGORY_IMAGE -> "Foto & Vídeo"
+                    ApplicationInfo.CATEGORY_SOCIAL -> "Redes Sociais"
+                    ApplicationInfo.CATEGORY_NEWS -> "Notícias"
+                    ApplicationInfo.CATEGORY_MAPS -> "Mapas & Navegação"
+                    ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Produtividade"
+                    else -> "Outros"
+                }
+            }
+            appMap[pkg] = Pair(label, category)
         }
       }
+      
       val launchable = appMap.entries
-          .sortedBy { it.value.lowercase(Locale.getDefault()) }
-          .map { Pair(it.key, it.value) }
+          .sortedBy { it.value.first.lowercase(Locale.getDefault()) }
 
       val result = Arguments.createArray()
-      launchable.forEach { (pkg, label) ->
+      launchable.forEach { (pkg, data) ->
         val map = Arguments.createMap()
         map.putString("packageName", pkg)
-        map.putString("label", label)
+        map.putString("label", data.first)
+        map.putString("category", data.second)
         result.pushMap(map)
       }
       promise.resolve(result)

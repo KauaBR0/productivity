@@ -38,75 +38,41 @@ export const fetchRanking = async (
     }
     
     const startDateISO = startDate.toISOString();
+    const nowISO = new Date().toISOString();
 
-    // 2. Fetch Sessions for the period
-    // Optimization: Filter by user_ids if provided to avoid scanning full table
-    let sessionQuery = supabase
-      .from('focus_sessions')
-      .select('user_id, minutes')
-      .gte('completed_at', startDateISO);
-    
-    if (filterIds) {
-        // If filterIds provided, include them + me
-        const idsToFetch = currentUserId ? [...filterIds, currentUserId] : filterIds;
-        if (idsToFetch.length > 0) {
-            sessionQuery = sessionQuery.in('user_id', idsToFetch);
-        } else {
-             // Following no one, show only me
-             if (currentUserId) sessionQuery = sessionQuery.eq('user_id', currentUserId);
-        }
-    }
-
-    const { data: sessions, error: sessionError } = await sessionQuery;
-
-    if (sessionError) throw sessionError;
-
-    // 3. Fetch Profiles
-    let profileQuery = supabase
-      .from('profiles')
-      .select('id, username, avatar_url, is_focusing');
-
-    if (filterIds) {
-        const idsToFetch = currentUserId ? [...filterIds, currentUserId] : filterIds;
-        if (idsToFetch.length > 0) {
-            profileQuery = profileQuery.in('id', idsToFetch);
-        } else {
-             if (currentUserId) profileQuery = profileQuery.eq('id', currentUserId);
-        }
-    }
-
-    const { data: profiles, error: profileError } = await profileQuery;
-      
-    if (profileError) throw profileError;
-
-    // 4. Aggregate Data
-    const userMap: Record<string, number> = {};
-
-    sessions?.forEach(session => {
-        if (!userMap[session.user_id]) userMap[session.user_id] = 0;
-        userMap[session.user_id] += session.minutes;
+    // CALL DATABASE FUNCTION (RPC)
+    // This performs aggregation on the server, saving bandwidth and CPU.
+    const { data: rankingData, error } = await supabase.rpc('get_ranking_data', {
+        p_start_date: startDateISO,
+        p_end_date: nowISO,
+        p_user_ids: filterIds && filterIds.length > 0 ? filterIds : null // Pass array or null for global
     });
 
-    // 5. Build Ranking List
-    const ranking: RankingUser[] = profiles?.map(profile => {
-        const totalMinutes = userMap[profile.id] || 0;
-        
+    if (error) {
+        console.error('RPC Error (fallback to legacy?):', error);
+        throw error;
+    }
+
+    // 5. Map to UI Model
+    // Note: The RPC handles sorting and limiting.
+    const ranking: RankingUser[] = (rankingData || []).map((row: any) => {
         const colors = ['#FF4500', '#00FF94', '#00D4FF', '#FF0055', '#FFD600', '#BF5AF2'];
-        const colorIndex = profile.id.charCodeAt(0) % colors.length;
+        // Safe check for ID if row.id is missing (shouldn't happen with correct RPC)
+        const id = row.id || 'unknown'; 
+        const colorIndex = id.charCodeAt(0) % colors.length;
 
         return {
-            id: profile.id,
-            name: profile.username || 'Anônimo',
-            minutes: totalMinutes,
-            isUser: profile.id === currentUserId,
+            id: id,
+            name: row.username || 'Anônimo',
+            minutes: Number(row.minutes), // Ensure number
+            isUser: id === currentUserId,
             avatarColor: colors[colorIndex],
-            isFocusing: profile.is_focusing || false,
-            avatarUrl: profile.avatar_url || undefined
+            isFocusing: row.is_focusing || false,
+            avatarUrl: row.avatar_url || undefined
         };
-    }) || [];
+    });
 
-    // 6. Sort
-    return ranking.sort((a, b) => b.minutes - a.minutes);
+    return ranking; // Already sorted by RPC
 
   } catch (error) {
     console.error('Error fetching ranking:', error);

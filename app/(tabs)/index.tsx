@@ -121,9 +121,9 @@ export default function HomeScreen() {
       router.push('/settings'); // Redirect to settings for editing
   };
 
-  const primaryCycle = cycles[0];
-  const infiniteCycle = cycles.find((cycle) => cycle.id === 'infinite');
-  const visibleCycles = cycles.filter((cycle) => cycle.id !== 'infinite');
+  const infiniteCycles = cycles.filter((cycle) => cycle.id === 'infinite' || cycle.type === 'infinite');
+  const fixedCycles = cycles.filter((cycle) => cycle.id !== 'infinite' && cycle.type !== 'infinite');
+  const primaryCycle = fixedCycles.length > 0 ? fixedCycles[0] : cycles[0]; // Hero prefers fixed cycle
 
   return (
     <SafeAreaView style={styles.container}>
@@ -222,35 +222,51 @@ export default function HomeScreen() {
             </Text>
           </View>
 
-          {/* Cronometro Infinito */}
+          {/* Infinite Cycles Carousel */}
           <View style={styles.quickActions}>
-            <PressableScale
-              style={[styles.quickCard, styles.infiniteQuickCard]}
-              onPress={() => infiniteCycle && handleSelectCycle(infiniteCycle)}
-            >
-              <View style={styles.infiniteContent}>
-                <View style={styles.lottieWrap}>
-                  <LottieView
-                    source={{ uri: 'https://lottie.host/945575cf-3408-4525-915e-d9587010dda1/T6PV3zCNW5.lottie' }}
-                    autoPlay
-                    loop
-                    style={styles.lottieIcon}
-                  />
-                </View>
-                <View style={styles.infiniteText}>
-                  <Text style={styles.quickTitle}>Cronometro Infinito</Text>
-                  <Text style={styles.quickSubtitle}>Voce decide quando alternar entre foco, recompensa e descanso</Text>
-                </View>
-              </View>
-            </PressableScale>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carouselContent}>
+              {infiniteCycles.map((cycle) => (
+                <PressableScale
+                  key={cycle.id}
+                  style={[styles.quickCard, styles.infiniteQuickCard, { width: 300, marginRight: 12 }]}
+                  onPress={() => handleSelectCycle(cycle)}
+                >
+                  <View style={styles.infiniteContent}>
+                    <View style={styles.lottieWrap}>
+                      {cycle.id === 'infinite' ? (
+                        <LottieView
+                          source={{ uri: 'https://lottie.host/945575cf-3408-4525-915e-d9587010dda1/T6PV3zCNW5.lottie' }}
+                          autoPlay
+                          loop
+                          style={styles.lottieIcon}
+                        />
+                      ) : (
+                        <View style={[styles.customIconPlaceholder, { backgroundColor: cycle.color }]}>
+                           <RotateCcw color="#000" size={32} />
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.infiniteText}>
+                      <Text style={styles.quickTitle} numberOfLines={1}>{cycle.label}</Text>
+                      <Text style={styles.quickSubtitle} numberOfLines={2}>
+                        {cycle.id === 'infinite' 
+                          ? 'Voce decide quando alternar.'
+                          : `Foco: ${cycle.focusDuration}m • Rec: ${cycle.rewardDuration}m`}
+                      </Text>
+                    </View>
+                  </View>
+                </PressableScale>
+              ))}
+            </ScrollView>
           </View>
-          {visibleCycles.map((cycle) => {
-            const isInfinite = cycle.id === 'infinite' || cycle.type === 'infinite';
+
+          {/* Fixed Cycles List */}
+          {fixedCycles.map((cycle) => {
             return (
             <PressableScale
               key={cycle.id}
               onPress={() => handleSelectCycle(cycle)}
-              style={[styles.card, { borderColor: cycle.color }, isInfinite && styles.infiniteCard]}
+              style={[styles.card, { borderColor: cycle.color }]}
             >
               <View style={styles.cardHeader}>
                 <View style={styles.cardHeaderLeft}>
@@ -258,18 +274,10 @@ export default function HomeScreen() {
                   <View>
                     <View style={styles.cardTitleRow}>
                       <Text style={[styles.cardTitle, { color: cycle.color }]}>{cycle.label.toUpperCase()}</Text>
-                      {isInfinite && (
-                        <View style={styles.infiniteBadge}>
-                          <Text style={styles.infiniteBadgeText}>CONTINUO</Text>
-                        </View>
-                      )}
                     </View>
                     <Text style={styles.cardSubtitle}>
                       {cycle.id.startsWith('custom_') ? 'Ciclo personalizado' : 'Ciclo padrão'}
                     </Text>
-                    {isInfinite && (
-                      <Text style={styles.infiniteSubtitle}>Voce decide quando alternar entre foco, recompensa e descanso</Text>
-                    )}
                   </View>
                 </View>
                 
@@ -561,6 +569,16 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   quickActions: {
     width: '100%',
+  },
+  carouselContent: {
+    paddingRight: 20, // Padding for last item
+  },
+  customIconPlaceholder: {
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   quickCard: {
     width: '100%',

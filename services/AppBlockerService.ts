@@ -10,6 +10,7 @@ type AttemptStats = {
 type InstalledApp = {
   packageName: string;
   label: string;
+  category?: string;
 };
 
 const BlockerModule = NativeModules?.AppBlocker;

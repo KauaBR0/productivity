@@ -262,6 +262,29 @@ export default function SettingsScreen() {
 
   const visibleApps = useMemo(() => filteredApps.slice(0, 80), [filteredApps]);
 
+  const groupedApps = useMemo(() => {
+    const groups: Record<string, typeof installedApps> = {};
+    visibleApps.forEach(app => {
+      const cat = app.category || 'Outros';
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(app);
+    });
+    
+    // Priority categories
+    const priority = ['Redes Sociais', 'Jogos', 'Música & Áudio', 'Vídeo'];
+    
+    return Object.keys(groups).sort((a, b) => {
+        const idxA = priority.indexOf(a);
+        const idxB = priority.indexOf(b);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        if (a === 'Outros') return 1; // Outros at bottom
+        if (b === 'Outros') return -1;
+        return a.localeCompare(b);
+    }).map(key => ({ title: key, data: groups[key] }));
+  }, [visibleApps]);
+
   const toggleBlockedApp = (packageName: string) => {
     const next = new Set(blockedSet);
     if (next.has(packageName)) {
@@ -513,24 +536,29 @@ export default function SettingsScreen() {
                   <Text style={styles.blockerError}>{appsError}</Text>
                 ) : (
                   <>
-                    {visibleApps.map((app) => {
-                      const selected = blockedSet.has(app.packageName);
-                      return (
-                        <Pressable
-                          key={app.packageName}
-                          onPress={() => toggleBlockedApp(app.packageName)}
-                          style={[styles.blockerAppRow, selected && styles.blockerAppRowActive]}
-                        >
-                          <View style={styles.blockerAppInfo}>
-                            <Text style={styles.blockerAppName}>{app.label}</Text>
-                            <Text style={styles.blockerAppPackage}>{app.packageName}</Text>
-                          </View>
-                          <View style={[styles.blockerCheck, selected && styles.blockerCheckActive]}>
-                            {selected && <Check color={theme.colors.accentDark} size={14} />}
-                          </View>
-                        </Pressable>
-                      );
-                    })}
+                    {groupedApps.map((group) => (
+                      <View key={group.title} style={styles.categoryGroup}>
+                        <Text style={styles.categoryHeader}>{group.title}</Text>
+                        {group.data.map((app) => {
+                          const selected = blockedSet.has(app.packageName);
+                          return (
+                            <Pressable
+                              key={app.packageName}
+                              onPress={() => toggleBlockedApp(app.packageName)}
+                              style={[styles.blockerAppRow, selected && styles.blockerAppRowActive]}
+                            >
+                              <View style={styles.blockerAppInfo}>
+                                <Text style={styles.blockerAppName}>{app.label}</Text>
+                                <Text style={styles.blockerAppPackage}>{app.packageName}</Text>
+                              </View>
+                              <View style={[styles.blockerCheck, selected && styles.blockerCheckActive]}>
+                                {selected && <Check color={theme.colors.accentDark} size={14} />}
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ))}
                     {filteredApps.length === 0 && (
                       <Text style={styles.blockerEmptyText}>Nenhum app encontrado.</Text>
                     )}
@@ -1115,6 +1143,18 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingVertical: 16,
+  },
+  categoryGroup: {
+    marginBottom: 12,
+  },
+  categoryHeader: {
+    color: theme.colors.accent,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    marginTop: 8,
+    letterSpacing: 0.5,
   },
   blockerAppRow: {
     flexDirection: 'row',

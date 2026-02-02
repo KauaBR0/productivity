@@ -160,7 +160,7 @@ export const SocialService = {
     return friends.length;
   },
 
-  async getFriends(currentUserId: string): Promise<SocialProfile[]> {
+  async getFriends(currentUserId: string, page = 0, limit = 20): Promise<SocialProfile[]> {
     const { data: following, error: followingError } = await supabase
       .from('follows')
       .select('following_id')
@@ -176,16 +176,20 @@ export const SocialService = {
     if (followersError) throw followersError;
 
     const followingSet = new Set((following || []).map(row => row.following_id));
-    const friendIds = (followers || [])
+    const allFriendIds = (followers || [])
       .filter(row => followingSet.has(row.follower_id))
       .map(row => row.follower_id);
 
-    if (friendIds.length === 0) return [];
+    if (allFriendIds.length === 0) return [];
+
+    // Paginate in memory (slice IDs)
+    const paginatedIds = allFriendIds.slice(page * limit, (page + 1) * limit);
+    if (paginatedIds.length === 0) return [];
 
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
       .select('id, username, avatar_url, is_focusing, current_streak, last_focus_date, phone')
-      .in('id', friendIds);
+      .in('id', paginatedIds);
 
     if (profilesError) throw profilesError;
 
