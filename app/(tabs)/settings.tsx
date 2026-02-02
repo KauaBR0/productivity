@@ -1,10 +1,10 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Alert, Platform, Pressable, Animated, StyleProp, ViewStyle, AppState, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Alert, Platform, Pressable, Animated, StyleProp, ViewStyle, AppState, ActivityIndicator, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSettings } from '@/context/SettingsContext';
 import { CycleDef } from '@/constants/FocusConfig';
 import { themes, ThemeName, Theme } from '@/constants/theme';
-import { Plus, Trash2, RotateCcw, Volume2, Music2, PhoneCall, X, Shield, ShieldCheck, Search, Check } from 'lucide-react-native';
+import { Plus, Trash2, RotateCcw, Volume2, Music2, PhoneCall, X, Shield, ShieldCheck, Search, Check, Infinity as InfinityIcon } from 'lucide-react-native';
 import { Audio } from 'expo-av';
 import { getInstalledApps, isAccessibilityEnabled, isAppBlockerAvailable, openAccessibilitySettings } from '@/services/AppBlockerService';
 
@@ -51,6 +51,7 @@ export default function SettingsScreen() {
 
   // Creation state for new cycle
   const [isCreatingCycle, setIsCreatingCycle] = useState(false);
+  const [isInfiniteMode, setIsInfiniteMode] = useState(false);
   const [newCycle, setNewCycle] = useState<Partial<CycleDef>>({
     label: '',
     focusDuration: 25,
@@ -89,10 +90,12 @@ export default function SettingsScreen() {
           rewardDuration: Number(newCycle.rewardDuration) || 5,
           restDuration: Number(newCycle.restDuration) || 5,
           color: generateRandomColor(),
+          type: isInfiniteMode ? 'infinite' : 'fixed',
       };
 
       addCycle(cycleToAdd);
       setIsCreatingCycle(false);
+      setIsInfiniteMode(false);
       setNewCycle({ label: '', focusDuration: 25, rewardDuration: 5, restDuration: 5 });
   };
 
@@ -571,9 +574,29 @@ export default function SettingsScreen() {
                     />
                 </View>
 
+                <View style={styles.toggleRow}>
+                    <View style={styles.toggleLabelContainer}>
+                        <InfinityIcon color={isInfiniteMode ? themes[themeName].colors.accent : '#666'} size={20} />
+                        <Text style={[styles.toggleLabel, isInfiniteMode && { color: themes[themeName].colors.accent }]}>
+                            Modo Infinito
+                        </Text>
+                    </View>
+                    <Switch
+                        value={isInfiniteMode}
+                        onValueChange={setIsInfiniteMode}
+                        trackColor={{ false: '#333', true: themes[themeName].colors.accent }}
+                        thumbColor={Platform.OS === 'android' ? '#FFF' : ''}
+                    />
+                </View>
+                {isInfiniteMode && (
+                    <Text style={styles.helperText}>
+                        O tempo de foco é livre. Os valores abaixo definem a proporção de recompensa ganha por tempo focado.
+                    </Text>
+                )}
+
                 <View style={styles.inputsRow}>
                     <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Foco</Text>
+                        <Text style={styles.inputLabel}>{isInfiniteMode ? 'Foco (para proporção)' : 'Foco'}</Text>
                         <TextInput 
                             style={styles.input} 
                             keyboardType="numeric"
@@ -1236,6 +1259,29 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   formGroup: {
       marginBottom: 16,
+  },
+  toggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+      paddingHorizontal: 4,
+  },
+  toggleLabelContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+  },
+  toggleLabel: {
+      color: '#666',
+      fontSize: 14,
+      fontWeight: '600',
+  },
+  helperText: {
+      color: '#666',
+      fontSize: 11,
+      marginBottom: 16,
+      fontStyle: 'italic',
   },
   saveNewButton: {
       backgroundColor: theme.colors.accent,

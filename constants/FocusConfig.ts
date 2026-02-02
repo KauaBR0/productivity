@@ -7,16 +7,18 @@ export interface CycleDef {
   rewardDuration: number; // in minutes
   restDuration: number; // in minutes
   color: string;
+  type?: 'fixed' | 'infinite';
 }
 
 export const CYCLES: CycleDef[] = [
   {
     id: 'infinite',
-    label: 'Cronometro Infinito',
+    label: 'Recompensa Acumulativa',
     focusDuration: 5,
     rewardDuration: 2,
     restDuration: 0.5,
     color: '#8B5CF6', // Violet
+    type: 'infinite',
   },
   {
     id: 'micro',

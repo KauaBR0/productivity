@@ -244,11 +244,13 @@ export default function HomeScreen() {
               </View>
             </PressableScale>
           </View>
-          {visibleCycles.map((cycle) => (
+          {visibleCycles.map((cycle) => {
+            const isInfinite = cycle.id === 'infinite' || cycle.type === 'infinite';
+            return (
             <PressableScale
               key={cycle.id}
               onPress={() => handleSelectCycle(cycle)}
-              style={[styles.card, { borderColor: cycle.color }, cycle.id === 'infinite' && styles.infiniteCard]}
+              style={[styles.card, { borderColor: cycle.color }, isInfinite && styles.infiniteCard]}
             >
               <View style={styles.cardHeader}>
                 <View style={styles.cardHeaderLeft}>
@@ -256,7 +258,7 @@ export default function HomeScreen() {
                   <View>
                     <View style={styles.cardTitleRow}>
                       <Text style={[styles.cardTitle, { color: cycle.color }]}>{cycle.label.toUpperCase()}</Text>
-                      {cycle.id === 'infinite' && (
+                      {isInfinite && (
                         <View style={styles.infiniteBadge}>
                           <Text style={styles.infiniteBadgeText}>CONTINUO</Text>
                         </View>
@@ -265,7 +267,7 @@ export default function HomeScreen() {
                     <Text style={styles.cardSubtitle}>
                       {cycle.id.startsWith('custom_') ? 'Ciclo personalizado' : 'Ciclo padrão'}
                     </Text>
-                    {cycle.id === 'infinite' && (
+                    {isInfinite && (
                       <Text style={styles.infiniteSubtitle}>Voce decide quando alternar entre foco, recompensa e descanso</Text>
                     )}
                   </View>
@@ -295,7 +297,8 @@ export default function HomeScreen() {
                 </View>
               </View>
             </PressableScale>
-          ))}
+            );
+          })}
 
           {/* New Cycle Button */}
           <PressableScale onPress={handleCreateCycle} style={styles.newCycleButton}>

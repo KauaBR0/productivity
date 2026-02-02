@@ -44,6 +44,7 @@ export type StoredTimerState = {
   focusAccumulatedSeconds: number;
   focusStartTime: number | null;
   isDeepFocus: boolean;
+  savedRewardSeconds: number;
 };
 
 const createPhaseConfig = (theme: Theme) => ({
@@ -85,23 +86,24 @@ export default function TimerScreen() {
   
   // Find cycle config
   const cycle = cycles.find(c => c.id === cycleId) as CycleDef;
-  const isInfiniteCycle = cycle?.id === 'infinite';
+  const isInfiniteCycle = cycle?.id === 'infinite' || cycle?.type === 'infinite';
   
   // State
   const [phase, setPhase] = useState<TimerPhase>('focus');
   const [timeLeft, setTimeLeft] = useState(
-    cycle ? (cycle.id === 'infinite' ? 0 : cycle.focusDuration * 60) : 0
+    cycle ? (isInfiniteCycle ? 0 : cycle.focusDuration * 60) : 0
   );
   const [isActive, setIsActive] = useState(true);
   const [selectedReward, setSelectedReward] = useState<string | null>(null);
   const [endTime, setEndTime] = useState<number | null>(
-    cycle ? (cycle.id === 'infinite' ? null : Date.now() + cycle.focusDuration * 60 * 1000) : null
+    cycle ? (isInfiniteCycle ? null : Date.now() + cycle.focusDuration * 60 * 1000) : null
   );
   const scheduledNotificationIdRef = useRef<string | null>(null);
   const focusStartRef = useRef<number | null>(null);
   const focusAccumulatedRef = useRef(0);
   const [lastFocusSeconds, setLastFocusSeconds] = useState(0);
   const [pendingRewardSeconds, setPendingRewardSeconds] = useState<number | null>(null);
+  const [savedRewardSeconds, setSavedRewardSeconds] = useState(0);
   const shouldPersistRef = useRef(true);
   const shouldKeepFocusRef = useRef(false);
 
@@ -120,7 +122,7 @@ export default function TimerScreen() {
   
   // Animation State
   const [totalDuration, setTotalDuration] = useState(
-    cycle ? (cycle.id === 'infinite' ? 1 : cycle.focusDuration * 60) : 1
+    cycle ? (isInfiniteCycle ? 1 : cycle.focusDuration * 60) : 1
   );
   const progress = useSharedValue(1);
   const pulseAnim = useRef(new RNAnimated.Value(0)).current;
@@ -146,6 +148,7 @@ export default function TimerScreen() {
       focusAccumulatedSeconds: focusAccumulatedRef.current,
       focusStartTime: focusStartRef.current,
       isDeepFocus,
+      savedRewardSeconds,
     };
   }, [
     cycle,
@@ -162,6 +165,7 @@ export default function TimerScreen() {
     accumulatedRewardTime,
     lastFocusSeconds,
     isDeepFocus,
+    savedRewardSeconds,
   ]);
 
   const persistTimerState = useCallback(async () => {
@@ -271,6 +275,7 @@ export default function TimerScreen() {
         );
         setLastFocusSeconds(saved.lastFocusSeconds ?? 0);
         setIsDeepFocus(saved.isDeepFocus ?? false);
+        setSavedRewardSeconds(saved.savedRewardSeconds ?? 0);
         focusAccumulatedRef.current = saved.focusAccumulatedSeconds ?? 0;
         focusStartRef.current = saved.focusStartTime ?? null;
 
@@ -632,6 +637,9 @@ export default function TimerScreen() {
   };
 
   const startInfiniteFocus = useCallback(async () => {
+    if (phase === 'reward') {
+      setSavedRewardSeconds(prev => prev + timeLeft);
+    }
     setSelectedReward(null);
     setPhase('focus');
     setIsActive(true);
@@ -642,7 +650,7 @@ export default function TimerScreen() {
     focusAccumulatedRef.current = 0;
     focusStartRef.current = Date.now();
     await cancelScheduledNotification();
-  }, [cancelScheduledNotification]);
+  }, [cancelScheduledNotification, phase, timeLeft]);
 
   const handleInfiniteToReward = useCallback(() => {
     if (!cycle) return;
@@ -651,14 +659,16 @@ export default function TimerScreen() {
     focusStartRef.current = null;
     setLastFocusSeconds(focusSeconds);
     const rewardSeconds = getProportionalSeconds(focusSeconds, rewardRatio);
+    const totalReward = rewardSeconds + savedRewardSeconds;
     const startedAt = Date.now() - focusSeconds * 1000;
     void processCycleCompletion(focusSeconds / 60, startedAt, cycle.label);
-    setPendingRewardSeconds(rewardSeconds);
+    setPendingRewardSeconds(totalReward);
+    setSavedRewardSeconds(0);
     setPhase('selection');
     setIsActive(false);
     setEndTime(null);
     void cancelScheduledNotification();
-  }, [cycle, getFocusElapsedSeconds, getProportionalSeconds, rewardRatio, processCycleCompletion, cancelScheduledNotification]);
+  }, [cycle, getFocusElapsedSeconds, getProportionalSeconds, rewardRatio, processCycleCompletion, cancelScheduledNotification, savedRewardSeconds]);
 
   const handleInfiniteToRest = useCallback(() => {
     if (!cycle) return;
