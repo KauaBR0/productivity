@@ -10,6 +10,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableType
+import android.content.pm.ApplicationInfo
 
 import android.util.Log
 
@@ -55,10 +56,6 @@ class BlockerModule(private val reactContext: ReactApplicationContext) :
     map.putDouble("lastAttemptTime", BlockerPrefs.getLastAttemptTime(reactContext).toDouble())
     promise.resolve(map)
   }
-
-import android.content.pm.ApplicationInfo
-
-// ...
 
   @ReactMethod
   fun getInstalledApps(promise: Promise) {
