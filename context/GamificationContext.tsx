@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
+import { useNetInfo } from '@react-native-community/netinfo';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { ACHIEVEMENTS, LEVELS, UserStats } from '../constants/GamificationConfig';
 import { calculateXp, evaluateAchievements, getDateKey, getNewStreak } from '../utils/gamification';
+import { SyncQueue } from '../utils/SyncQueue';
 
 interface FocusSession {
   timestamp: number;
@@ -34,6 +36,7 @@ const GamificationContext = createContext<GamificationContextType | undefined>(u
 
 export const GamificationProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
+  const netInfo = useNetInfo();
   const [xp, setXp] = useState(0);
   const [level, setLevel] = useState(1);
   const [stats, setStats] = useState<UserStats>({ 
@@ -47,6 +50,13 @@ export const GamificationProvider = ({ children }: { children: ReactNode }) => {
   const [recentUnlockedIds, setRecentUnlockedIds] = useState<string[]>([]);
   const [isFocusing, _setIsFocusing] = useState(false);
   const recentUnlockTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync Queue Processing
+  useEffect(() => {
+    if (netInfo.isConnected && user) {
+      SyncQueue.processQueue();
+    }
+  }, [netInfo.isConnected, user]);
 
   // Load data on mount
   useEffect(() => {
@@ -215,30 +225,50 @@ export const GamificationProvider = ({ children }: { children: ReactNode }) => {
 
     // Sync to Supabase
     if (user) {
-        try {
-            // Insert Session
-            const { error: sessionError } = await supabase.from('focus_sessions').insert({
-                user_id: user.id,
-                minutes: minutes,
-                started_at: new Date(startedAt).toISOString(),
-                completed_at: new Date().toISOString(),
-                label: label,
-            });
+        const sessionPayload = {
+            user_id: user.id,
+            minutes: minutes,
+            started_at: new Date(startedAt).toISOString(),
+            completed_at: new Date().toISOString(),
+            label: label,
+        };
 
-            if (sessionError) {
-                console.error('Supabase session insert error:', sessionError);
-                Alert.alert('Erro de Sincronização', `Não foi possível salvar sua sessão: ${sessionError.message}`);
+        const profilePayload = {
+            id: user.id,
+            current_streak: newStreak,
+            last_focus_date: today,
+        };
+
+        const isOnline = netInfo.isConnected && netInfo.isInternetReachable !== false;
+
+        if (!isOnline) {
+             console.log('Offline: Queuing data...');
+             Alert.alert('Modo Offline', 'Sessão salva localmente. Sincronizaremos quando a internet voltar.');
+             await SyncQueue.addToQueue('INSERT_SESSION', sessionPayload);
+             await SyncQueue.addToQueue('UPDATE_PROFILE', profilePayload);
+        } else {
+            try {
+                // Insert Session
+                const { error: sessionError } = await supabase.from('focus_sessions').insert(sessionPayload);
+
+                if (sessionError) {
+                    console.error('Supabase session insert error:', sessionError);
+                    Alert.alert('Erro de Sincronização', `Salvando na fila para tentar novamente: ${sessionError.message}`);
+                    await SyncQueue.addToQueue('INSERT_SESSION', sessionPayload);
+                    await SyncQueue.addToQueue('UPDATE_PROFILE', profilePayload);
+                } else {
+                    // Update Profile Stats
+                    const { error: profileError } = await supabase.from('profiles').update(profilePayload).eq('id', user.id);
+                    if (profileError) {
+                        console.error('Profile update error:', profileError);
+                        await SyncQueue.addToQueue('UPDATE_PROFILE', profilePayload);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to sync session/stats to Supabase:', error);
+                await SyncQueue.addToQueue('INSERT_SESSION', sessionPayload);
+                await SyncQueue.addToQueue('UPDATE_PROFILE', profilePayload);
             }
-
-            // Update Profile Stats
-            await supabase.from('profiles').update({
-                current_streak: newStreak,
-                last_focus_date: today,
-                // optionally longest_streak logic handled by DB trigger or separate check
-            }).eq('id', user.id);
-
-        } catch (error) {
-            console.error('Failed to sync session/stats to Supabase:', error);
         }
     }
   };

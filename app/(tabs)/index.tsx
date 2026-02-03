@@ -9,7 +9,7 @@ import { useGamification } from '@/context/GamificationContext';
 import { Play, Settings, Plus, Edit2, Sparkles, BarChart3, RotateCcw } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import { Theme } from '@/constants/theme';
-import { ACTIVE_TIMER_STORAGE_KEY, StoredTimerState } from '../timer';
+import { ACTIVE_TIMER_STORAGE_KEY, StoredTimerState } from '@/types/timer';
 
 const PressableScale = ({
   onPress,

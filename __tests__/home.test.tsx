@@ -59,7 +59,7 @@ jest.mock('@/context/GamificationContext', () => ({
 }));
 
 // Mock timer constants
-jest.mock('../app/timer', () => ({
+jest.mock('@/types/timer', () => ({
   ACTIVE_TIMER_STORAGE_KEY: 'active_timer_state_v1',
 }));
 
