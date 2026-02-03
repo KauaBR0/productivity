@@ -1,4 +1,7 @@
 -- Optimize get_full_profile to use denormalized columns
+-- We drop it first because changing return types (bigint to integer) requires a full replacement
+DROP FUNCTION IF EXISTS get_full_profile(uuid, uuid);
+
 CREATE OR REPLACE FUNCTION get_full_profile(
   p_target_id uuid,
   p_viewer_id uuid
