@@ -5,12 +5,14 @@ interface PressableScaleProps {
   onPress?: () => void;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
 }
 
 export const PressableScale: React.FC<PressableScaleProps> = ({
   onPress,
   children,
   style,
+  disabled,
 }) => {
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -23,7 +25,7 @@ export const PressableScale: React.FC<PressableScaleProps> = ({
   };
 
   return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut} disabled={disabled}>
       <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
     </Pressable>
   );

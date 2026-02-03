@@ -1,38 +1,12 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { StyleSheet, Text, View, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Pressable, Animated, StyleProp, ViewStyle } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { StyleSheet, Text, View, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { Lock, Mail, User as UserIcon, ArrowLeft, Phone } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
-
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-  disabled,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-  disabled?: boolean;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut} disabled={disabled}>
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
-  );
-};
+import Toast from 'react-native-toast-message';
+import { PressableScale } from '@/components/PressableScale';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -48,27 +22,29 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!name || !email || !password || !phone) {
-      Alert.alert('Erro', 'Preencha todos os campos.');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Preencha todos os campos.',
+      });
       return;
     }
 
     setLoading(true);
     try {
       await signUp(name, email, password, phone);
-      
-      Alert.alert(
-        "Bem-vindo ao Productivy!",
-        "Sua conta foi criada com sucesso. Vamos focar?",
-        [
-          { 
-            text: "Vamos!", 
-            onPress: () => router.replace('/') 
-          }
-        ]
-      );
-      
+      Toast.show({
+        type: 'success',
+        text1: 'Conta criada',
+        text2: 'Bem-vindo ao Productivy!',
+      });
+      router.replace('/');
     } catch (error: any) {
-      Alert.alert('Erro no Cadastro', error.message || 'Ocorreu um erro.');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro no Cadastro',
+        text2: error.message || 'Ocorreu um erro.',
+      });
     } finally {
       setLoading(false);
     }

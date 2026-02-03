@@ -1,37 +1,13 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { StyleSheet, Text, View, TextInput, FlatList, Image, ActivityIndicator, Pressable, Animated, StyleProp, ViewStyle } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { StyleSheet, Text, View, TextInput, FlatList, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { SocialService, SocialProfile } from '@/services/SocialService';
-import { ArrowLeft, Search as SearchIcon, UserPlus, Sparkles } from 'lucide-react-native';
+import { AlertTriangle, ArrowLeft, Search as SearchIcon, UserPlus } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
-
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
-  );
-};
+import { PressableScale } from '@/components/PressableScale';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -41,15 +17,18 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SocialProfile[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSearch = async () => {
     if (!query.trim() || !user) return;
+    setError(null);
     setLoading(true);
     try {
       const users = await SocialService.searchUsers(query, user.id);
       setResults(users);
     } catch (error) {
       console.error(error);
+      setError('Não foi possível buscar usuários.');
     } finally {
       setLoading(false);
     }
@@ -107,6 +86,15 @@ export default function SearchScreen() {
 
       {loading ? (
         <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 20 }} />
+      ) : error && results.length === 0 ? (
+        <EmptyState
+          theme={theme}
+          icon={AlertTriangle}
+          title="Erro ao buscar"
+          description={error}
+          actionLabel="Tentar novamente"
+          onAction={handleSearch}
+        />
       ) : (
         <FlatList
           data={results}
@@ -114,31 +102,23 @@ export default function SearchScreen() {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-              query.length > 0 ? (
-                <View style={styles.emptyState}>
-                  <View style={styles.emptyIcon}>
-                    <SearchIcon color={theme.colors.accent} size={22} />
-                  </View>
-                  <Text style={styles.emptyTitle}>Nada por aqui</Text>
-                  <Text style={styles.emptySubtitle}>
-                    Tente outro termo ou convide pessoas para seu ranking.
-                  </Text>
-                  <PressableScale style={styles.emptyCta} onPress={() => router.push('/ranking' as any)}>
-                    <Sparkles color="#000" size={18} />
-                    <Text style={styles.emptyCtaText}>Ver ranking</Text>
-                  </PressableScale>
-                </View>
-              ) : (
-                <View style={styles.emptyState}>
-                  <View style={styles.emptyIcon}>
-                    <UserPlus color={theme.colors.accent} size={22} />
-                  </View>
-                  <Text style={styles.emptyTitle}>Encontre pessoas</Text>
-                  <Text style={styles.emptySubtitle}>
-                    Busque usuários pelo nome para acompanhar o desempenho.
-                  </Text>
-                </View>
-              )
+            query.length > 0 ? (
+              <EmptyState
+                theme={theme}
+                icon={SearchIcon}
+                title="Nada por aqui"
+                description="Tente outro termo ou convide pessoas para seu ranking."
+                actionLabel="Ver ranking"
+                onAction={() => router.push('/ranking' as any)}
+              />
+            ) : (
+              <EmptyState
+                theme={theme}
+                icon={UserPlus}
+                title="Encontre pessoas"
+                description="Busque usuários pelo nome para acompanhar o desempenho."
+              />
+            )
           }
         />
       )}

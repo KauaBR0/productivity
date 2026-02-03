@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { useSettings } from '@/context/SettingsContext';
-import { themes, ThemeName, Theme } from '@/constants/theme';
+import { themes, ThemeName } from '@/constants/theme';
 import { PressableScale } from '@/components/PressableScale';
 
 interface ThemeSettingsProps {

@@ -1,39 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { StyleSheet, Text, View, FlatList, Image, Pressable, Animated, StyleProp, ViewStyle, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { StyleSheet, Text, View, FlatList, Image, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { fetchRanking, RankingUser, formatTimeDisplay } from '@/utils/RankingLogic';
 import { GroupMembership, GroupService } from '@/services/GroupService';
-import { ArrowLeft, Users, Sparkles } from 'lucide-react-native';
+import { AlertTriangle, ArrowLeft, Users, Sparkles } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
-
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
-  );
-};
+import { PressableScale } from '@/components/PressableScale';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function GroupRankingScreen() {
   const router = useRouter();
@@ -45,9 +21,12 @@ export default function GroupRankingScreen() {
   const [rankingData, setRankingData] = useState<RankingUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [groupsError, setGroupsError] = useState<string | null>(null);
+  const [rankingError, setRankingError] = useState<string | null>(null);
 
   const fetchGroups = useCallback(async () => {
     if (!user) return;
+    setGroupsError(null);
     try {
       const data = await GroupService.getMyGroups(user.id);
       setGroups(data);
@@ -58,6 +37,7 @@ export default function GroupRankingScreen() {
       }
     } catch (error) {
       console.error('Failed to load groups', error);
+      setGroupsError('Não foi possível carregar seus grupos.');
     }
   }, [user, selectedGroupId]);
 
@@ -73,12 +53,14 @@ export default function GroupRankingScreen() {
       return;
     }
     setLoading(true);
+    setRankingError(null);
     try {
       const memberIds = await GroupService.getGroupMemberIds(selectedGroupId);
       const data = await fetchRanking(period, user.id, memberIds);
       setRankingData(data);
     } catch (error) {
       console.error('Failed to load group ranking', error);
+      setRankingError('Não foi possível carregar o ranking do grupo.');
     } finally {
       setLoading(false);
     }
@@ -186,6 +168,15 @@ export default function GroupRankingScreen() {
 
           {loading ? (
             <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 20 }} />
+          ) : rankingError && rankingData.length === 0 ? (
+            <EmptyState
+              theme={theme}
+              icon={AlertTriangle}
+              title="Erro ao carregar ranking"
+              description={rankingError}
+              actionLabel="Tentar novamente"
+              onAction={loadGroupRanking}
+            />
           ) : (
             <FlatList
               data={rankingData}
@@ -203,25 +194,34 @@ export default function GroupRankingScreen() {
                 ) : null
               }
               ListEmptyComponent={
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>Sem dados para este grupo</Text>
-                  <Text style={styles.emptySubtitle}>Complete ciclos para aparecer no ranking.</Text>
-                </View>
+                <EmptyState
+                  theme={theme}
+                  icon={Sparkles}
+                  title="Sem dados para este grupo"
+                  description="Complete ciclos para aparecer no ranking."
+                />
               }
             />
           )}
         </>
+      ) : groupsError ? (
+        <EmptyState
+          theme={theme}
+          icon={AlertTriangle}
+          title="Erro ao carregar grupos"
+          description={groupsError}
+          actionLabel="Tentar novamente"
+          onAction={fetchGroups}
+        />
       ) : (
-        <View style={styles.groupEmpty}>
-          <View style={styles.groupEmptyIcon}>
-            <Users color={theme.colors.accent} size={20} />
-          </View>
-          <Text style={styles.groupEmptyTitle}>Voce ainda nao tem grupos</Text>
-          <Text style={styles.groupEmptySubtitle}>Crie um grupo ou entre com um codigo.</Text>
-          <PressableScale onPress={() => router.push('/groups' as any)} style={styles.groupCta}>
-            <Text style={styles.groupCtaText}>Criar ou entrar</Text>
-          </PressableScale>
-        </View>
+        <EmptyState
+          theme={theme}
+          icon={Users}
+          title="Voce ainda nao tem grupos"
+          description="Crie um grupo ou entre com um codigo."
+          actionLabel="Criar ou entrar"
+          onAction={() => router.push('/groups' as any)}
+        />
       )}
     </View>
   );

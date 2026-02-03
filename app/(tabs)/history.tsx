@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, Pressable, Animated, StyleProp, ViewStyle } from 'react-native';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { StyleSheet, Text, View, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
-import { Calendar, Clock, History as HistoryIcon, Play } from 'lucide-react-native';
+import { AlertTriangle, Calendar, Clock, History as HistoryIcon } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -34,7 +34,7 @@ const HistorySkeleton = ({ styles }: { styles: any }) => (
   </View>
 );
 
-const HistoryItemComponent = React.memo(({ item, styles }: { item: HistoryItem; styles: any }) => {
+const HistoryItemComponent = React.memo(function HistoryItemComponent({ item, styles }: { item: HistoryItem; styles: any }) {
   const formatDate = (dateString: string) => {
     if (!dateString) return 'Data desconhecida';
     const date = new Date(dateString);
@@ -80,9 +80,11 @@ export default function HistoryScreen() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchHistory = useCallback(async () => {
     if (!user) return;
+    setError(null);
     try {
       const { data, error } = await supabase
         .from('focus_sessions')
@@ -95,6 +97,7 @@ export default function HistoryScreen() {
       setHistory(data || []);
     } catch (error) {
       console.error('Error fetching history:', error);
+      setError('Não foi possível carregar o histórico.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -115,6 +118,8 @@ export default function HistoryScreen() {
     <HistoryItemComponent item={item} styles={styles} />
   ), [styles]);
 
+  const showErrorState = !!error && history.length === 0 && !loading;
+
   return (
     <View style={styles.container}>
       <View style={styles.background}>
@@ -128,24 +133,33 @@ export default function HistoryScreen() {
 
       {loading && !refreshing ? (
         <HistorySkeleton styles={styles} />
+      ) : showErrorState ? (
+        <EmptyState
+          theme={theme}
+          icon={AlertTriangle}
+          title="Erro ao carregar histórico"
+          description={error || 'Tente novamente em instantes.'}
+          actionLabel="Tentar novamente"
+          onAction={fetchHistory}
+        />
       ) : (
         <FlatList
-            data={history}
-            renderItem={renderItem}
-            keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={styles.listContent}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            ListEmptyComponent={
-                <EmptyState
-                  theme={theme}
-                  icon={HistoryIcon}
-                  title="Seu histórico está vazio"
-                  description="Conclua um ciclo de foco para começar a registrar seu progresso."
-                  actionLabel="Iniciar foco"
-                  onAction={() => router.push('/timer')}
-                />
-            }
+          data={history}
+          renderItem={renderItem}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={styles.listContent}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          ListEmptyComponent={
+            <EmptyState
+              theme={theme}
+              icon={HistoryIcon}
+              title="Seu histórico está vazio"
+              description="Conclua um ciclo de foco para começar a registrar seu progresso."
+              actionLabel="Iniciar foco"
+              onAction={() => router.push('/timer')}
+            />
+          }
         />
       )}
     </View>

@@ -2,7 +2,9 @@ import { ACHIEVEMENTS } from "@/constants/GamificationConfig";
 import { Theme } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/context/SettingsContext";
-import { FocusSessionSummary, SocialProfile, SocialService } from "@/services/SocialService";
+import { useProfile } from "@/hooks/useProfile";
+import { useProfileStore } from "@/store/useProfileStore";
+import { FocusSessionSummary, SocialService } from "@/services/SocialService";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowLeft,
@@ -15,22 +17,20 @@ import {
   UserCheck,
   UserPlus,
 } from "lucide-react-native";
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Animated,
   Image,
   Modal,
   Pressable,
   ScrollView,
-  StyleProp,
   StyleSheet,
   Text,
   View,
-  ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import { PressableScale } from "@/components/PressableScale";
 
 const formatDecimal = (value: number) => {
   if (!Number.isFinite(value)) return "0";
@@ -57,51 +57,6 @@ const formatTime = (dateString: string | null) => {
   });
 };
 
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-  disabled,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-  disabled?: boolean;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, {
-      toValue: 0.98,
-      useNativeDriver: true,
-      friction: 6,
-      tension: 120,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-      friction: 6,
-      tension: 120,
-    }).start();
-  };
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      disabled={disabled}
-    >
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>
-        {children}
-      </Animated.View>
-    </Pressable>
-  );
-};
-
 export default function PublicProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
@@ -109,44 +64,46 @@ export default function PublicProfileScreen() {
   const { theme } = useSettings();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
+  const targetUserId = typeof id === "string" ? id : id?.[0];
 
-  const [profile, setProfile] = useState<SocialProfile | null>(null);
   const [history, setHistory] = useState<FocusSessionSummary[]>([]);
-  const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [followingLoading, setFollowingLoading] = useState(false);
   const [showAchievementsModal, setShowAchievementsModal] = useState(false);
-
-  const loadProfile = useCallback(async () => {
-    if (!user || !id) return;
-    setLoading(true);
-    setHistoryLoading(true);
-    setHistory([]);
-    try {
-      const data = await SocialService.getUserProfile(id as string, user.id);
-      setProfile(data);
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Erro", "Não foi possível carregar o perfil.");
-      router.back();
-      setLoading(false);
-      setHistoryLoading(false);
-      return;
-    }
-    setLoading(false);
-    try {
-      const historyData = await SocialService.getUserFocusHistory(id as string, 12);
-      setHistory(historyData);
-    } catch (error) {
-      console.error("Erro ao carregar histórico público:", error);
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, [id, user, router]);
+  const updateCachedProfile = useProfileStore((state) => state.updateProfile);
+  const { profile, loading, error } = useProfile(targetUserId);
 
   useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+    if (!targetUserId) return;
+    let active = true;
+    setHistoryLoading(true);
+    setHistory([]);
+    SocialService.getUserFocusHistory(targetUserId, 12)
+      .then((historyData) => {
+        if (!active) return;
+        setHistory(historyData);
+      })
+      .catch((err) => {
+        console.error("Erro ao carregar histórico público:", err);
+      })
+      .finally(() => {
+        if (!active) return;
+        setHistoryLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [targetUserId]);
+
+  useEffect(() => {
+    if (!error || profile) return;
+    Toast.show({
+      type: "error",
+      text1: "Erro",
+      text2: error,
+    });
+    router.back();
+  }, [error, profile, router]);
 
   const handleToggleFollow = async () => {
     if (!user || !profile) return;
@@ -154,29 +111,33 @@ export default function PublicProfileScreen() {
     try {
       if (profile.am_i_following) {
         await SocialService.unfollowUser(user.id, profile.id);
-        setProfile((prev) =>
+        updateCachedProfile(profile.id, (prev) =>
           prev
             ? {
                 ...prev,
                 am_i_following: false,
                 followers_count: (prev.followers_count || 1) - 1,
               }
-            : null,
+            : null
         );
       } else {
         await SocialService.followUser(user.id, profile.id);
-        setProfile((prev) =>
+        updateCachedProfile(profile.id, (prev) =>
           prev
             ? {
                 ...prev,
                 am_i_following: true,
                 followers_count: (prev.followers_count || 0) + 1,
               }
-            : null,
+            : null
         );
       }
     } catch {
-      Alert.alert("Erro", "Falha ao atualizar seguidor.");
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "Falha ao atualizar seguidor.",
+      });
     } finally {
       setFollowingLoading(false);
     }
@@ -242,7 +203,7 @@ export default function PublicProfileScreen() {
     return { days: filled, total, average, max, bestDay, consistency, bestHourLabel };
   }, [history]);
 
-  if (loading) {
+  if (loading && !profile) {
     return (
       <View
         style={[

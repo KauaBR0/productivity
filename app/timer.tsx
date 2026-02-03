@@ -1,11 +1,12 @@
-import React, { useMemo, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Modal, Dimensions, Pressable, Animated as RNAnimated, Platform } from 'react-native';
+import React, { useMemo } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Modal, Dimensions, Pressable, Animated as RNAnimated } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Gift, Brain, Coffee, Clock, Volume2, X, Play, Pause } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import RewardRoulette from '@/components/RewardRoulette';
 import { useTimerLogic } from '@/hooks/useTimerLogic';
+import { useActionDialog } from '@/hooks/useActionDialog';
 
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.8;
@@ -41,10 +42,11 @@ const createPhaseConfig = (theme: Theme) => ({
 });
 
 export default function TimerScreen() {
+  const { lofiTrack, theme } = useSettings();
+  const { openDialog, dialog } = useActionDialog(theme);
   const {
     cycle,
     rewards,
-    theme,
     rouletteExtraSpins,
     recentRewards,
     phase,
@@ -77,7 +79,7 @@ export default function TimerScreen() {
     handleFinishRest,
     handleSkipRest,
     startReward,
-  } = useTimerLogic();
+  } = useTimerLogic({ openActionDialog: openDialog });
 
   const styles = useMemo(() => createStyles(theme), [theme]);
   const phaseConfig = useMemo(() => createPhaseConfig(theme), [theme]);
@@ -203,7 +205,7 @@ export default function TimerScreen() {
           )}
           {/* Lofi removed from UI logic but kept in hook logic, simplified UI here */}
           {/* Re-adding UI elements based on hook state */}
-          {useSettings().lofiTrack !== 'off' && (
+          {lofiTrack !== 'off' && (
             <Pressable
               style={[styles.lofiToggle, isLofiMuted && styles.lofiToggleMuted]}
               onPress={() => setIsLofiMuted((prev: boolean) => !prev)}
@@ -456,6 +458,7 @@ export default function TimerScreen() {
         </View>
       </Modal>
 
+      {dialog}
     </View>
   );
 }

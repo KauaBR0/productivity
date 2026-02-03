@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { AppState, Vibration, Alert, Platform, Animated as RNAnimated } from 'react-native';
+import { AppState, Vibration, Platform, Animated as RNAnimated } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -13,8 +13,10 @@ import { startForegroundTimer, stopForegroundTimer, updateForegroundTimer } from
 import { setSessionActive } from '@/services/AppBlockerService';
 import { ACTIVE_TIMER_STORAGE_KEY, StoredTimerState, TimerPhase } from '@/types/timer';
 import { useTimerStore } from '@/store/useTimerStore';
+import Toast from 'react-native-toast-message';
+import { ActionDialogOpener, ActionDialogOptions } from '@/hooks/useActionDialog';
 
-export const useTimerLogic = () => {
+export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener }) => {
   useKeepAwake();
   const router = useRouter();
   const { cycleId } = useLocalSearchParams();
@@ -37,6 +39,7 @@ export const useTimerLogic = () => {
     savedRewardSeconds, setSavedRewardSeconds,
     isDeepFocus, setIsDeepFocus,
     setTimerState,
+    resetStore,
     restoreFromStorage
   } = useTimerStore();
 
@@ -51,6 +54,8 @@ export const useTimerLogic = () => {
   const focusAccumulatedRef = useRef(0);
   const shouldPersistRef = useRef(true);
   const shouldKeepFocusRef = useRef(false);
+  const skipInitRef = useRef(false);
+  const openActionDialog = options?.openActionDialog;
 
   // UI State (Modals)
   const [showOneMoreModal, setShowOneMoreModal] = useState(false);
@@ -65,7 +70,7 @@ export const useTimerLogic = () => {
   // Initialize / Restore
   useEffect(() => {
     const init = async () => {
-      if (!cycle) return;
+      if (!cycle || skipInitRef.current) return;
       
       // If store is already active with this cycle, just sync endTime
       if (storeCycleId === cycle.id && isActive) {
@@ -121,6 +126,19 @@ export const useTimerLogic = () => {
   const progress = useSharedValue(1);
   const pulseAnim = useRef(new RNAnimated.Value(0)).current;
   const buttonScale = useRef(new RNAnimated.Value(1)).current;
+
+  const openDialog = useCallback(
+    async (dialogOptions: ActionDialogOptions) => {
+      if (!openActionDialog) {
+        const cancelAction = dialogOptions.actions.find((action) => action.tone === 'cancel')
+          ?? dialogOptions.actions.find((action) => action.key === 'cancel')
+          ?? dialogOptions.actions[0];
+        return cancelAction?.key ?? 'cancel';
+      }
+      return openActionDialog(dialogOptions);
+    },
+    [openActionDialog]
+  );
 
   // Persistence Logic
   const buildStoredState = useCallback((): StoredTimerState | null => {
@@ -244,7 +262,11 @@ export const useTimerLogic = () => {
   // Validating cycle existence
   useEffect(() => {
     if (!cycle) {
-      Alert.alert("Erro", "Ciclo não encontrado");
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Ciclo não encontrado',
+      });
       router.back();
     }
   }, [cycle, router]);
@@ -450,11 +472,21 @@ export const useTimerLogic = () => {
     else if (phase === 'reward') { playAlarm(); Vibration.vibrate([0, 500, 200, 500]); setShowRewardEndModal(true); } 
     else if (phase === 'rest') {
       playAlarm(); Vibration.vibrate([0, 500, 200, 500]);
-      Alert.alert("Ciclo Completo!", "Parabéns, você finalizou o ciclo.", [
-        { text: "Voltar ao Início", onPress: async () => { shouldPersistRef.current = false; shouldKeepFocusRef.current = false; await clearTimerState(); router.back(); }, },
-      ]);
+      void openDialog({
+        title: 'Ciclo Completo!',
+        message: 'Parabéns, você finalizou o ciclo.',
+        actions: [{ key: 'back', label: 'Voltar ao Início' }],
+        allowBackdropClose: false,
+      }).then(async (action) => {
+        if (action !== 'back') return;
+        skipInitRef.current = true;
+        shouldPersistRef.current = false;
+        shouldKeepFocusRef.current = false;
+        await clearTimerState();
+        router.back();
+      });
     }
-  }, [isActive, isInfiniteCycle, phase, cancelScheduledNotification, clearTimerState, playAlarm, router, setIsActive]);
+  }, [isActive, isInfiniteCycle, phase, cancelScheduledNotification, clearTimerState, playAlarm, router, setIsActive, openDialog]);
 
   useEffect(() => {
     if (isActive && timeLeft === 0 && phase !== 'selection') { handlePhaseEnd(); }
@@ -600,45 +632,61 @@ export const useTimerLogic = () => {
   };
 
   const handleCancel = async () => {
-    Alert.alert("Sair do ciclo?", "Você pode voltar para a home e continuar depois. O timer seguirá contando.", [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Continuar em background", onPress: async () => { shouldKeepFocusRef.current = phase === 'focus' && isActive && !showOneMoreModal; await persistTimerState(); router.back(); }, },
-        { text: "Encerrar ciclo", style: "destructive", onPress: async () => {
-            shouldPersistRef.current = false;
-            shouldKeepFocusRef.current = false;
-            if (isInfiniteCycle && phase === 'focus' && cycle) {
-              const focusSeconds = Math.max(0, getFocusElapsedSeconds());
-              if (focusSeconds > 0) {
-                const startedAt = Date.now() - focusSeconds * 1000;
-                await processCycleCompletion(focusSeconds / 60, startedAt, cycle.label);
-              }
-            }
-            await clearTimerState();
-            await stopForegroundTimer();
-            await cancelScheduledNotification();
-            router.back();
-          },
-        },
-      ]
-    );
+    const action = await openDialog({
+      title: 'Sair do ciclo?',
+      message: 'Você pode voltar para a home e continuar depois. O timer seguirá contando.',
+      actions: [
+        { key: 'cancel', label: 'Cancelar', tone: 'cancel' },
+        { key: 'background', label: 'Continuar em background' },
+        { key: 'end', label: 'Encerrar ciclo', tone: 'destructive' },
+      ],
+    });
+
+    if (action === 'background') {
+      shouldKeepFocusRef.current = phase === 'focus' && isActive && !showOneMoreModal;
+      await persistTimerState();
+      router.back();
+      return;
+    }
+
+    if (action !== 'end') return;
+    skipInitRef.current = true;
+    shouldPersistRef.current = false;
+    shouldKeepFocusRef.current = false;
+    if (isInfiniteCycle && phase === 'focus' && cycle) {
+      const focusSeconds = Math.max(0, getFocusElapsedSeconds());
+      if (focusSeconds > 0) {
+        const startedAt = Date.now() - focusSeconds * 1000;
+        await processCycleCompletion(focusSeconds / 60, startedAt, cycle.label);
+      }
+    }
+    await clearTimerState();
+    await stopForegroundTimer();
+    await cancelScheduledNotification();
+    resetStore();
+    router.back();
   };
 
   const handleSkipRest = async () => {
-    Alert.alert("Pular descanso?", "Você finalizará o ciclo agora.", [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Finalizar", style: "destructive", onPress: async () => {
-              setIsActive(false);
-              setEndTime(null);
-              shouldPersistRef.current = false;
-              shouldKeepFocusRef.current = false;
-              await clearTimerState();
-              await stopForegroundTimer();
-              await cancelScheduledNotification();
-              router.back();
-            },
-        },
-      ]
-    );
+    const action = await openDialog({
+      title: 'Pular descanso?',
+      message: 'Você finalizará o ciclo agora.',
+      actions: [
+        { key: 'cancel', label: 'Cancelar', tone: 'cancel' },
+        { key: 'finish', label: 'Finalizar', tone: 'destructive' },
+      ],
+    });
+
+    if (action !== 'finish') return;
+    skipInitRef.current = true;
+    setIsActive(false);
+    setEndTime(null);
+    shouldPersistRef.current = false;
+    shouldKeepFocusRef.current = false;
+    await clearTimerState();
+    await stopForegroundTimer();
+    await cancelScheduledNotification();
+    router.back();
   };
 
   const rouletteRewardMinutes = useMemo(() => {

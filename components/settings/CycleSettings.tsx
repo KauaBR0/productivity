@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Switch, Alert, Platform, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Switch, Platform } from 'react-native';
 import { CycleDef } from '@/constants/FocusConfig';
 import { useSettings } from '@/context/SettingsContext';
 import { Plus, X, Trash2, Infinity as InfinityIcon } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
 import { PressableScale } from '@/components/PressableScale';
 import Toast from 'react-native-toast-message';
+import { useActionDialog } from '@/hooks/useActionDialog';
 
 interface CycleSettingsProps {
   theme: Theme;
@@ -15,6 +16,7 @@ interface CycleSettingsProps {
 
 export const CycleSettings: React.FC<CycleSettingsProps> = ({ theme, themeName, styles }) => {
   const { cycles, addCycle, updateCycle, removeCycle } = useSettings();
+  const { openDialog, dialog } = useActionDialog(theme);
   const [isCreatingCycle, setIsCreatingCycle] = useState(false);
   const [isInfiniteMode, setIsInfiniteMode] = useState(false);
   const [newCycle, setNewCycle] = useState<Partial<CycleDef>>({
@@ -58,15 +60,18 @@ export const CycleSettings: React.FC<CycleSettingsProps> = ({ theme, themeName, 
       setNewCycle({ label: '', focusDuration: 25, rewardDuration: 5, restDuration: 5 });
   };
 
-  const handleDeleteCycle = (id: string) => {
-    Alert.alert(
-        "Excluir Ciclo",
-        "Tem certeza que deseja excluir este ciclo?",
-        [
-            { text: "Cancelar", style: "cancel" },
-            { text: "Excluir", style: "destructive", onPress: () => removeCycle(id) }
-        ]
-    );
+  const handleDeleteCycle = async (id: string) => {
+    const action = await openDialog({
+      title: 'Excluir Ciclo',
+      message: 'Tem certeza que deseja excluir este ciclo?',
+      actions: [
+        { key: 'cancel', label: 'Cancelar', tone: 'cancel' },
+        { key: 'delete', label: 'Excluir', tone: 'destructive' },
+      ],
+    });
+
+    if (action !== 'delete') return;
+    removeCycle(id);
   };
 
   const startEditingCycle = (cycle: CycleDef) => {
@@ -248,6 +253,7 @@ export const CycleSettings: React.FC<CycleSettingsProps> = ({ theme, themeName, 
             </View>
         );
       })}
+      {dialog}
     </View>
   );
 };

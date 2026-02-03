@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, Text, View, Animated, StyleProp, ViewStyle } from 'react-native';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Contacts from 'expo-contacts';
@@ -7,34 +8,10 @@ import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { SocialProfile, SocialService } from '@/services/SocialService';
 import { normalizePhone } from '@/utils/phone';
-import { ArrowLeft, Phone, UserPlus } from 'lucide-react-native';
+import { AlertTriangle, ArrowLeft, Phone, UserPlus } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
-
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
-  );
-};
+import { PressableScale } from '@/components/PressableScale';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const formatPhoneKey = (value?: string | null) => {
   if (!value) return '';
@@ -52,14 +29,20 @@ export default function ContactsSyncScreen() {
   const [matches, setMatches] = useState<SocialProfile[]>([]);
   const [addedIds, setAddedIds] = useState<Record<string, boolean>>({});
   const [contactNameByPhone, setContactNameByPhone] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
 
   const handleSync = useCallback(async () => {
     if (!user) return;
+    setError(null);
     setSyncing(true);
     try {
       const { status } = await Contacts.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permissao negada', 'Ative o acesso aos contatos para sincronizar.');
+        Toast.show({
+          type: 'info',
+          text1: 'Permissão negada',
+          text2: 'Ative o acesso aos contatos para sincronizar.',
+        });
         return;
       }
 
@@ -101,7 +84,11 @@ export default function ContactsSyncScreen() {
 
       if (!uniquePhones.length) {
         setMatches([]);
-        Alert.alert('Nenhum contato', 'Nao encontramos telefones para sincronizar.');
+        Toast.show({
+          type: 'info',
+          text1: 'Nenhum contato',
+          text2: 'Não encontramos telefones para sincronizar.',
+        });
         return;
       }
 
@@ -116,7 +103,12 @@ export default function ContactsSyncScreen() {
       setMatches(filtered);
     } catch (error) {
       console.error(error);
-      Alert.alert('Erro', 'Falha ao sincronizar contatos.');
+      setError('Falha ao sincronizar contatos.');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Falha ao sincronizar contatos.',
+      });
     } finally {
       setSyncing(false);
     }
@@ -143,7 +135,11 @@ export default function ContactsSyncScreen() {
         delete clone[profile.id];
         return clone;
       });
-      Alert.alert('Erro', 'Nao foi possivel adicionar.');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não foi possível adicionar.',
+      });
     }
   };
 
@@ -210,6 +206,15 @@ export default function ContactsSyncScreen() {
 
       {syncing ? (
         <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 20 }} />
+      ) : error && matches.length === 0 ? (
+        <EmptyState
+          theme={theme}
+          icon={AlertTriangle}
+          title="Erro ao sincronizar"
+          description={error}
+          actionLabel="Tentar novamente"
+          onAction={handleSync}
+        />
       ) : (
         <FlatList
           data={matches}
@@ -217,10 +222,14 @@ export default function ContactsSyncScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.list, { paddingBottom: Math.max(insets.bottom, 24) + 60 }]}
           ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Nenhum contato encontrado</Text>
-              <Text style={styles.emptySubtitle}>Tente sincronizar novamente ou convide seus amigos.</Text>
-            </View>
+            <EmptyState
+              theme={theme}
+              icon={Phone}
+              title="Nenhum contato encontrado"
+              description="Tente sincronizar novamente ou convide seus amigos."
+              actionLabel="Sincronizar"
+              onAction={handleSync}
+            />
           }
         />
       )}

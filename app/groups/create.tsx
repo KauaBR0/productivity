@@ -1,37 +1,13 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View, TextInput, Pressable, Animated, StyleProp, ViewStyle, Alert, ActivityIndicator } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { StyleSheet, Text, View, TextInput, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { GroupService } from '@/services/GroupService';
 import { ArrowLeft, Users, Sparkles } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
-
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
-  );
-};
+import Toast from 'react-native-toast-message';
+import { PressableScale } from '@/components/PressableScale';
 
 export default function GroupCreateScreen() {
   const router = useRouter();
@@ -46,7 +22,11 @@ export default function GroupCreateScreen() {
     if (!user) return;
     const trimmed = name.trim();
     if (!trimmed) {
-      Alert.alert('Nome obrigatorio', 'Defina um nome para o grupo.');
+      Toast.show({
+        type: 'error',
+        text1: 'Nome obrigatório',
+        text2: 'Defina um nome para o grupo.',
+      });
       return;
     }
     setSaving(true);
@@ -55,7 +35,11 @@ export default function GroupCreateScreen() {
       router.replace(`/groups/${groupId}` as any);
     } catch (error) {
       console.error(error);
-      Alert.alert('Erro', 'Nao foi possivel criar o grupo.');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não foi possível criar o grupo.',
+      });
     } finally {
       setSaving(false);
     }

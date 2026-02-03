@@ -1,37 +1,14 @@
-import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, FlatList, Pressable, Animated, StyleProp, ViewStyle, Alert, ActivityIndicator, TextInput } from 'react-native';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { StyleSheet, Text, View, FlatList, Pressable, ActivityIndicator, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { Group, GroupMember, GroupRole, GroupService } from '@/services/GroupService';
 import { ArrowLeft, Users, ShieldCheck, Shield, Crown, Trash2, LogOut } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
-
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
-  );
-};
+import Toast from 'react-native-toast-message';
+import { PressableScale } from '@/components/PressableScale';
+import { useActionDialog } from '@/hooks/useActionDialog';
 
 const roleLabel = (role: GroupRole) => {
   if (role === 'owner') return 'Dono';
@@ -52,6 +29,7 @@ export default function GroupDetailScreen() {
   const { user } = useAuth();
   const { theme } = useSettings();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { openDialog, dialog } = useActionDialog(theme);
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +47,10 @@ export default function GroupDetailScreen() {
         GroupService.getGroupMembers(groupId),
       ]);
       if (!groupData) {
-        Alert.alert('Grupo nao encontrado');
+        Toast.show({
+          type: 'error',
+          text1: 'Grupo não encontrado',
+        });
         router.back();
         return;
       }
@@ -79,7 +60,11 @@ export default function GroupDetailScreen() {
       setDraftDescription(groupData.description || '');
     } catch (error) {
       console.error(error);
-      Alert.alert('Erro', 'Nao foi possivel carregar o grupo.');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não foi possível carregar o grupo.',
+      });
       router.back();
     } finally {
       setLoading(false);
@@ -98,7 +83,10 @@ export default function GroupDetailScreen() {
     if (!group) return;
     const nameValue = draftName.trim();
     if (!nameValue) {
-      Alert.alert('Nome obrigatorio');
+      Toast.show({
+        type: 'error',
+        text1: 'Nome obrigatório',
+      });
       return;
     }
     setSaving(true);
@@ -111,7 +99,11 @@ export default function GroupDetailScreen() {
       await loadGroup();
     } catch (error) {
       console.error(error);
-      Alert.alert('Erro', 'Nao foi possivel salvar.');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não foi possível salvar.',
+      });
     } finally {
       setSaving(false);
     }
@@ -120,65 +112,84 @@ export default function GroupDetailScreen() {
   const handleLeave = async () => {
     if (!group || !user) return;
     if (isOwner) {
-      Alert.alert('Voce e o dono', 'Para sair, exclua o grupo.');
+      Toast.show({
+        type: 'info',
+        text1: 'Você é o dono',
+        text2: 'Para sair, exclua o grupo.',
+      });
       return;
     }
-    Alert.alert('Sair do grupo?', 'Voce perdera o acesso ao ranking.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Sair',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await GroupService.leaveGroup(group.id, user.id);
-            router.back();
-          } catch (error) {
-            console.error(error);
-            Alert.alert('Erro', 'Nao foi possivel sair.');
-          }
-        },
-      },
-    ]);
+    const action = await openDialog({
+      title: 'Sair do grupo?',
+      message: 'Voce perdera o acesso ao ranking.',
+      actions: [
+        { key: 'cancel', label: 'Cancelar', tone: 'cancel' },
+        { key: 'leave', label: 'Sair', tone: 'destructive' },
+      ],
+    });
+
+    if (action !== 'leave') return;
+    try {
+      await GroupService.leaveGroup(group.id, user.id);
+      router.back();
+    } catch (error) {
+      console.error(error);
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não foi possível sair.',
+      });
+    }
   };
 
   const handleDeleteGroup = async () => {
     if (!group) return;
-    Alert.alert('Excluir grupo?', 'Essa acao nao pode ser desfeita.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await GroupService.deleteGroup(group.id);
-            router.back();
-          } catch (error) {
-            console.error(error);
-            Alert.alert('Erro', 'Nao foi possivel excluir o grupo.');
-          }
-        },
-      },
-    ]);
+    const action = await openDialog({
+      title: 'Excluir grupo?',
+      message: 'Essa acao nao pode ser desfeita.',
+      actions: [
+        { key: 'cancel', label: 'Cancelar', tone: 'cancel' },
+        { key: 'delete', label: 'Excluir', tone: 'destructive' },
+      ],
+    });
+
+    if (action !== 'delete') return;
+    try {
+      await GroupService.deleteGroup(group.id);
+      router.back();
+    } catch (error) {
+      console.error(error);
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não foi possível excluir o grupo.',
+      });
+    }
   };
 
-  const handleRemoveMember = (member: GroupMember) => {
+  const handleRemoveMember = async (member: GroupMember) => {
     if (!group) return;
-    Alert.alert('Remover membro?', `Remover ${member.username || 'membro'} do grupo?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Remover',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await GroupService.removeMember(group.id, member.id);
-            await loadGroup();
-          } catch (error) {
-            console.error(error);
-            Alert.alert('Erro', 'Nao foi possivel remover.');
-          }
-        },
-      },
-    ]);
+    const action = await openDialog({
+      title: 'Remover membro?',
+      message: `Remover ${member.username || 'membro'} do grupo?`,
+      actions: [
+        { key: 'cancel', label: 'Cancelar', tone: 'cancel' },
+        { key: 'remove', label: 'Remover', tone: 'destructive' },
+      ],
+    });
+
+    if (action !== 'remove') return;
+    try {
+      await GroupService.removeMember(group.id, member.id);
+      await loadGroup();
+    } catch (error) {
+      console.error(error);
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não foi possível remover.',
+      });
+    }
   };
 
   const renderMember = ({ item }: { item: GroupMember }) => (
@@ -320,6 +331,7 @@ export default function GroupDetailScreen() {
           </View>
         }
       />
+      {dialog}
     </View>
   );
 }

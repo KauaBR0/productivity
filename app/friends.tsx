@@ -1,38 +1,16 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, Text, View, Animated, StyleProp, ViewStyle } from 'react-native';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { SocialProfile, SocialService } from '@/services/SocialService';
-import { ArrowLeft, Users, Sparkles } from 'lucide-react-native';
+import { AlertTriangle, ArrowLeft, Users } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
-
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
-  );
-};
+import Toast from 'react-native-toast-message';
+import { PressableScale } from '@/components/PressableScale';
+import { useActionDialog } from '@/hooks/useActionDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const formatLastFocus = (dateValue?: string | null) => {
   if (!dateValue) return 'Sem foco recente';
@@ -47,14 +25,17 @@ export default function FriendsScreen() {
   const { theme } = useSettings();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
+  const { openDialog, dialog } = useActionDialog(theme);
 
   const [friends, setFriends] = useState<SocialProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const loadFriends = useCallback(async (isRefresh = false) => {
     if (!user) return;
+    setError(null);
     if (isRefresh) {
       setRefreshing(true);
     } else {
@@ -66,6 +47,7 @@ export default function FriendsScreen() {
       setFriends(list);
     } catch (error) {
       console.error(error);
+      setError('Não foi possível carregar seus amigos.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -76,31 +58,32 @@ export default function FriendsScreen() {
     loadFriends();
   }, [loadFriends]);
 
-  const handleRemoveFriend = (friendId: string) => {
+  const handleRemoveFriend = async (friendId: string) => {
     if (!user) return;
-    Alert.alert(
-      'Remover amigo',
-      'Tem certeza que deseja remover essa amizade?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Remover',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setRemovingId(friendId);
-              await SocialService.unfollowUser(user.id, friendId);
-              setFriends((prev) => prev.filter((f) => f.id !== friendId));
-            } catch (error) {
-              console.error(error);
-              Alert.alert('Erro', 'Nao foi possivel remover o amigo.');
-            } finally {
-              setRemovingId(null);
-            }
-          },
-        },
-      ]
-    );
+    const action = await openDialog({
+      title: 'Remover amigo',
+      message: 'Tem certeza que deseja remover essa amizade?',
+      actions: [
+        { key: 'cancel', label: 'Cancelar', tone: 'cancel' },
+        { key: 'remove', label: 'Remover', tone: 'destructive' },
+      ],
+    });
+
+    if (action !== 'remove') return;
+    try {
+      setRemovingId(friendId);
+      await SocialService.unfollowUser(user.id, friendId);
+      setFriends((prev) => prev.filter((f) => f.id !== friendId));
+    } catch (error) {
+      console.error(error);
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não foi possível remover o amigo.',
+      });
+    } finally {
+      setRemovingId(null);
+    }
   };
 
   const renderItem = ({ item }: { item: SocialProfile }) => (
@@ -136,6 +119,8 @@ export default function FriendsScreen() {
     </PressableScale>
   );
 
+  const showErrorState = !!error && friends.length === 0 && !loading;
+
   return (
     <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
       <View style={styles.background}>
@@ -155,6 +140,15 @@ export default function FriendsScreen() {
 
       {loading ? (
         <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 20 }} />
+      ) : showErrorState ? (
+        <EmptyState
+          theme={theme}
+          icon={AlertTriangle}
+          title="Erro ao carregar amigos"
+          description={error || 'Tente novamente em instantes.'}
+          actionLabel="Tentar novamente"
+          onAction={() => loadFriends(true)}
+        />
       ) : (
         <FlatList
           data={friends}
@@ -164,22 +158,18 @@ export default function FriendsScreen() {
           refreshing={refreshing}
           onRefresh={() => loadFriends(true)}
           ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIcon}>
-                <Users color={theme.colors.accent} size={22} />
-              </View>
-              <Text style={styles.emptyTitle}>Sem amigos ainda</Text>
-              <Text style={styles.emptySubtitle}>
-                Adicione pessoas para acompanhar os ciclos e manter a motivacao.
-              </Text>
-              <PressableScale style={styles.emptyCta} onPress={() => router.push('/search' as any)}>
-                <Sparkles color="#000" size={18} />
-                <Text style={styles.emptyCtaText}>Encontrar pessoas</Text>
-              </PressableScale>
-            </View>
+            <EmptyState
+              theme={theme}
+              icon={Users}
+              title="Sem amigos ainda"
+              description="Adicione pessoas para acompanhar os ciclos e manter a motivacao."
+              actionLabel="Encontrar pessoas"
+              onAction={() => router.push('/search' as any)}
+            />
           }
         />
       )}
+      {dialog}
     </View>
   );
 }

@@ -1,52 +1,16 @@
-import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, Platform, Pressable, Animated, StyleProp, ViewStyle, Image } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useRef, useMemo } from 'react';
+import { StyleSheet, Text, View, ScrollView, SafeAreaView, StatusBar, Platform, Animated, Image } from 'react-native';
+import { useRouter } from 'expo-router';
 import { CycleDef } from '@/constants/FocusConfig';
 import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
 import { useGamification } from '@/context/GamificationContext';
-import { Play, Settings, Plus, Edit2, Sparkles, BarChart3, RotateCcw } from 'lucide-react-native';
+import { Play, Settings, Plus, Sparkles, BarChart3, RotateCcw } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import { Theme } from '@/constants/theme';
-import { StoredTimerState } from '@/types/timer';
 import { useTimerStore } from '@/store/useTimerStore';
-
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, {
-      toValue: 0.98,
-      useNativeDriver: true,
-      friction: 6,
-      tension: 120,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-      friction: 6,
-      tension: 120,
-    }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
-  );
-};
+import { PressableScale } from '@/components/PressableScale';
+import { CycleCard } from '@/components/ui/CycleCard';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -248,52 +212,15 @@ export default function HomeScreen() {
           </View>
 
           {/* Fixed Cycles List */}
-          {fixedCycles.map((cycle) => {
-            return (
-            <PressableScale
+          {fixedCycles.map((cycle) => (
+            <CycleCard
               key={cycle.id}
-              onPress={() => handleSelectCycle(cycle)}
-              style={[styles.card, { borderColor: cycle.color }]}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.cardHeaderLeft}>
-                  <View style={[styles.cardAccent, { backgroundColor: cycle.color }]} />
-                  <View>
-                    <View style={styles.cardTitleRow}>
-                      <Text style={[styles.cardTitle, { color: cycle.color }]}>{cycle.label.toUpperCase()}</Text>
-                    </View>
-                    <Text style={styles.cardSubtitle}>
-                      {cycle.id.startsWith('custom_') ? 'Ciclo personalizado' : 'Ciclo padrão'}
-                    </Text>
-                  </View>
-                </View>
-                
-                <View style={styles.cardActions}>
-                  {cycle.id.startsWith('custom_') && (
-                    <TouchableOpacity onPress={() => handleEditCycle(cycle)} style={styles.editActionButton}>
-                      <Edit2 color="#8A8A8F" size={16} />
-                    </TouchableOpacity>
-                  )}
-                  <View style={[styles.playButton, { backgroundColor: cycle.color }]}>
-                    <Play size={20} color="#000" fill="#000" style={{ marginLeft: 2 }} />
-                  </View>
-                </View>
-              </View>
-              
-              <View style={styles.statsContainer}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>{cycle.focusDuration} min</Text>
-                  <Text style={styles.statLabel}>FOCO</Text>
-                </View>
-                <View style={styles.divider} />
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>{cycle.rewardDuration} min</Text>
-                  <Text style={styles.statLabel}>RECOMPENSA</Text>
-                </View>
-              </View>
-            </PressableScale>
-            );
-          })}
+              cycle={cycle}
+              theme={theme}
+              onPress={handleSelectCycle}
+              onEdit={handleEditCycle}
+            />
+          ))}
 
           {/* New Cycle Button */}
           <PressableScale onPress={handleCreateCycle} style={styles.newCycleButton}>
@@ -612,46 +539,6 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-  card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.xl,
-    padding: 24,
-    borderWidth: 1.5,
-    marginBottom: 4,
-    ...theme.shadow.card,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  cardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  cardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  cardAccent: {
-    width: 10,
-    height: 42,
-    borderRadius: 6,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    marginTop: 4,
-    letterSpacing: 0.4,
-  },
   infiniteCard: {
     backgroundColor: 'rgba(139, 92, 246, 0.08)',
     borderWidth: 1.5,
@@ -674,60 +561,6 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     color: theme.colors.textDim,
     fontSize: 11,
     marginTop: 6,
-  },
-  cardActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-  },
-  editActionButton: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: theme.colors.surfaceSoft,
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-  },
-  playButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      justifyContent: 'center',
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.4,
-      shadowRadius: 8,
-      elevation: 5,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between', // Space out to fill width
-  },
-  statBox: {
-    flex: 1,
-    alignItems: 'center', // Center text
-  },
-  statValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  divider: {
-    width: 1,
-    height: 40,
-    backgroundColor: theme.colors.border,
-    marginHorizontal: 10,
   },
 
   // New Cycle Button

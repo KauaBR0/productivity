@@ -1,38 +1,12 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { StyleSheet, Text, View, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Pressable, Animated, StyleProp, ViewStyle } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { StyleSheet, Text, View, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { Lock, Mail } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
-
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-  disabled,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-  disabled?: boolean;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut} disabled={disabled}>
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
-  );
-};
+import Toast from 'react-native-toast-message';
+import { PressableScale } from '@/components/PressableScale';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -47,7 +21,11 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Erro', 'Preencha todos os campos.');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Preencha todos os campos.',
+      });
       return;
     }
 
@@ -56,7 +34,11 @@ export default function LoginScreen() {
       await signIn(email, password);
       // Navigation is handled by AuthContext useEffect
     } catch (error: any) {
-      Alert.alert('Erro no Login', error.message || 'Ocorreu um erro.');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro no Login',
+        text2: error.message || 'Ocorreu um erro.',
+      });
     } finally {
       setLoading(false);
     }
@@ -67,7 +49,11 @@ export default function LoginScreen() {
       try {
           await signInWithGoogle();
       } catch (error: any) {
-          Alert.alert('Erro no Google Login', error.message || 'Não foi possível conectar com o Google.');
+          Toast.show({
+            type: 'error',
+            text1: 'Erro no Google Login',
+            text2: error.message || 'Não foi possível conectar com o Google.',
+          });
       } finally {
           setGoogleLoading(false);
       }

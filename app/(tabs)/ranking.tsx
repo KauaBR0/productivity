@@ -1,18 +1,18 @@
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { StyleSheet, Text, View, FlatList, Image, Pressable, Animated, StyleProp, ViewStyle } from 'react-native';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { StyleSheet, Text, View, FlatList, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Contacts from 'expo-contacts';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
-import { fetchRanking, RankingUser, formatTimeDisplay } from '@/utils/RankingLogic';
+import { RankingUser, formatTimeDisplay } from '@/utils/RankingLogic';
 import { SocialService } from '@/services/SocialService';
-import { supabase } from '@/lib/supabase';
-import { UserPlus, Globe, Users, Crown, Sparkles, Users2, Phone } from 'lucide-react-native';
+import { AlertTriangle, UserPlus, Globe, Users, Crown, Sparkles, Users2, Phone } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
 import { normalizePhone } from '@/utils/phone';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useRanking } from '@/hooks/useRanking';
+import { PressableScale } from '@/components/PressableScale';
 
 const RankingSkeleton = ({ styles }: { styles: any }) => (
   <View style={styles.listContent}>
@@ -31,32 +31,6 @@ const RankingSkeleton = ({ styles }: { styles: any }) => (
     ))}
   </View>
 );
-
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
-  );
-};
 
 const RankItem = React.memo(({ item, index, styles, router }: { item: RankingUser; index: number; styles: any; router: any }) => {
   const isTop3 = index < 3;
@@ -108,6 +82,8 @@ const RankItem = React.memo(({ item, index, styles, router }: { item: RankingUse
   );
 });
 
+RankItem.displayName = 'RankItem';
+
 export default function RankingScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -119,7 +95,7 @@ export default function RankingScreen() {
   const [contactsFilterIds, setContactsFilterIds] = useState<string[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const { rankingData, loading: isLoading, refresh } = useRanking(period, scope, contactsFilterIds);
+  const { rankingData, loading: isLoading, error, refresh } = useRanking(period, scope, contactsFilterIds);
 
   const topThree = rankingData.slice(0, 3);
   const currentUser = rankingData.find((item) => item.isUser);
@@ -197,6 +173,7 @@ export default function RankingScreen() {
     <RankItem item={item} index={index} styles={styles} router={router} />
   ), [styles, router]);
 
+  const showErrorState = !!error && rankingData.length === 0 && !isLoading;
 
   return (
     <View style={styles.container}>
@@ -268,6 +245,17 @@ export default function RankingScreen() {
 
       {isLoading && !refreshing ? (
         <RankingSkeleton styles={styles} />
+      ) : showErrorState ? (
+        <EmptyState
+          theme={theme}
+          icon={AlertTriangle}
+          title="Erro ao carregar ranking"
+          description={error || 'Tente novamente em instantes.'}
+          actionLabel="Tentar novamente"
+          onAction={() => {
+            refresh();
+          }}
+        />
       ) : (
         <>
           {/* Podium */}

@@ -1,37 +1,14 @@
-import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, FlatList, Pressable, Animated, StyleProp, ViewStyle, TextInput, Alert, ActivityIndicator } from 'react-native';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { StyleSheet, Text, View, FlatList, TextInput, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { GroupMembership, GroupService } from '@/services/GroupService';
-import { ArrowLeft, Users, Plus, LogIn } from 'lucide-react-native';
+import { AlertTriangle, ArrowLeft, Users, Plus, LogIn } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
-
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
-  );
-};
+import Toast from 'react-native-toast-message';
+import { PressableScale } from '@/components/PressableScale';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function GroupsScreen() {
   const router = useRouter();
@@ -42,16 +19,23 @@ export default function GroupsScreen() {
   const [loading, setLoading] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadGroups = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    setError(null);
     try {
       const data = await GroupService.getMyGroups(user.id);
       setGroups(data);
     } catch (error) {
       console.error(error);
-      Alert.alert('Erro', 'Nao foi possivel carregar seus grupos.');
+      setError('Não foi possível carregar seus grupos.');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não foi possível carregar seus grupos.',
+      });
     } finally {
       setLoading(false);
     }
@@ -73,7 +57,11 @@ export default function GroupsScreen() {
       router.push(`/groups/${groupId}` as any);
     } catch (error) {
       console.error(error);
-      Alert.alert('Erro', 'Codigo invalido ou grupo cheio.');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Código inválido ou grupo cheio.',
+      });
     } finally {
       setJoining(false);
     }
@@ -98,6 +86,8 @@ export default function GroupsScreen() {
       </View>
     </PressableScale>
   );
+
+  const showErrorState = !!error && groups.length === 0 && !loading;
 
   return (
     <View style={styles.container}>
@@ -143,6 +133,15 @@ export default function GroupsScreen() {
 
       {loading ? (
         <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 20 }} />
+      ) : showErrorState ? (
+        <EmptyState
+          theme={theme}
+          icon={AlertTriangle}
+          title="Erro ao carregar grupos"
+          description={error || 'Tente novamente em instantes.'}
+          actionLabel="Tentar novamente"
+          onAction={loadGroups}
+        />
       ) : (
         <FlatList
           data={groups}
@@ -152,10 +151,14 @@ export default function GroupsScreen() {
           onRefresh={loadGroups}
           refreshing={loading}
           ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Nenhum grupo ainda</Text>
-              <Text style={styles.emptySubtitle}>Crie um grupo ou entre usando um codigo.</Text>
-            </View>
+            <EmptyState
+              theme={theme}
+              icon={Users}
+              title="Nenhum grupo ainda"
+              description="Crie um grupo ou entre usando um codigo."
+              actionLabel="Criar grupo"
+              onAction={() => router.push('/groups/create' as any)}
+            />
           }
         />
       )}

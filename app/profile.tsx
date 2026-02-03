@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, TextInput, Image, Alert, ScrollView, Platform, Pressable, Animated as RNAnimated, StyleProp, ViewStyle, Modal } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, TextInput, Image, ScrollView, Platform, Pressable, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown, FadeIn, ZoomIn, useAnimatedStyle, useSharedValue, withRepeat, withTiming, withSequence, Easing, interpolate, Extrapolate } from 'react-native-reanimated';
 import { useAuth } from '@/context/AuthContext';
@@ -11,6 +11,9 @@ import { X, Camera, LogOut, Save, Trophy, Lock, Flame, Clock, CheckCircle, Chevr
 import { Theme } from '@/constants/theme';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useProfile } from '@/hooks/useProfile';
+import Toast from 'react-native-toast-message';
+import { PressableScale } from '@/components/PressableScale';
+import { useActionDialog } from '@/hooks/useActionDialog';
 
 const ProfileSkeleton = ({ styles }: { styles: any }) => (
   <View style={styles.container}>
@@ -44,32 +47,6 @@ const formatDecimal = (value: number) => {
   if (!Number.isFinite(value)) return '0';
   if (Number.isInteger(value)) return String(value);
   return value.toFixed(2).replace('.', ',');
-};
-
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) => {
-  const scale = useRef(new RNAnimated.Value(1)).current;
-
-  const handlePressIn = () => {
-    RNAnimated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  const handlePressOut = () => {
-    RNAnimated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <RNAnimated.View style={[{ transform: [{ scale }] }, style]}>{children}</RNAnimated.View>
-    </Pressable>
-  );
 };
 
 const achievementIconMap = {
@@ -207,6 +184,7 @@ export default function ProfileScreen() {
   const { xp, level, stats, streak, history, unlockedAchievements, recentUnlockedIds, nextLevelXp, progressToNextLevel } = useGamification();
   const { theme } = useSettings();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { openDialog, dialog } = useActionDialog(theme);
   
   const { profile, loading, refresh } = useProfile(user?.id);
   const [name, setName] = useState(user?.name || '');
@@ -277,16 +255,18 @@ export default function ProfileScreen() {
     router.back();
   };
 
-  const handleLogout = () => {
-    // ... (omitted handleLogout)
-    Alert.alert(
-      "Sair",
-      "Deseja realmente sair da sua conta?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Sair", style: "destructive", onPress: signOut }
-      ]
-    );
+  const handleLogout = async () => {
+    const action = await openDialog({
+      title: 'Sair',
+      message: 'Deseja realmente sair da sua conta?',
+      actions: [
+        { key: 'cancel', label: 'Cancelar', tone: 'cancel' },
+        { key: 'confirm', label: 'Sair', tone: 'destructive' },
+      ],
+    });
+
+    if (action !== 'confirm') return;
+    await signOut();
   };
 
   const openAchievementModal = (achievement: Achievement) => {
@@ -303,9 +283,17 @@ export default function ProfileScreen() {
       await updateProfile({ name, bio });
       setIsEditing(false);
       refresh(); // Refresh hook data
-      Alert.alert("Sucesso", "Perfil atualizado!");
+      Toast.show({
+        type: 'success',
+        text1: 'Sucesso',
+        text2: 'Perfil atualizado!',
+      });
     } catch {
-      Alert.alert("Erro", "Falha ao atualizar perfil.");
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Falha ao atualizar perfil.',
+      });
     }
   };
 
@@ -619,6 +607,7 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+      {dialog}
     </View>
   );
 }
