@@ -13,6 +13,7 @@ import { GamificationProvider } from '@/context/GamificationContext';
 import { useTimerStore } from '@/store/useTimerStore';
 import Toast from 'react-native-toast-message';
 import { toastConfig } from '@/components/ToastConfig';
+import { OfflineNotice } from '@/components/ui/OfflineNotice';
 
 // Configure Notifications Handler
 // ... (omitted setNotificationHandler)
@@ -61,6 +62,7 @@ export default function RootLayout() {
       <GamificationProvider>
         <SettingsProvider>
           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <OfflineNotice />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="timer" options={{ animation: 'slide_from_right' }} />

@@ -12,6 +12,7 @@ import { Theme } from '@/constants/theme';
 import { normalizePhone } from '@/utils/phone';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useRanking } from '@/hooks/useRanking';
 
 const RankingSkeleton = ({ styles }: { styles: any }) => (
   <View style={styles.listContent}>
@@ -112,18 +113,20 @@ export default function RankingScreen() {
   const { user } = useAuth();
   const { theme } = useSettings();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [rankingData, setRankingData] = useState<RankingUser[]>([]);
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [scope, setScope] = useState<'global' | 'following' | 'contacts'>('global');
   const [contactsDenied, setContactsDenied] = useState(false);
   const [contactsFilterIds, setContactsFilterIds] = useState<string[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+
+  const { rankingData, loading: isLoading, refresh } = useRanking(period, scope, contactsFilterIds);
+
   const topThree = rankingData.slice(0, 3);
   const currentUser = rankingData.find((item) => item.isUser);
   const currentUserRank = currentUser ? rankingData.findIndex((item) => item.id === currentUser.id) + 1 : null;
 
   const loadContactIds = useCallback(async () => {
+    // ... (omitted loadContactIds)
     if (!user) return [];
     setContactsDenied(false);
     try {
@@ -170,47 +173,25 @@ export default function RankingScreen() {
     }
   }, [user]);
 
-  const loadRanking = useCallback(async (forceContactsReload = false) => {
-    if (!user) return;
-    try {
-      let filterIds: string[] | undefined = undefined;
-      
-      if (scope === 'following' && user) {
-          try {
-              filterIds = await SocialService.getMyFollowingIds(user.id);
-          } catch (error) {
-              console.error("Failed to load following ids", error);
-          }
-      }
-      if (scope === 'contacts') {
-          if (!contactsFilterIds || forceContactsReload) {
-            const ids = await loadContactIds();
-            setContactsFilterIds(ids);
-            filterIds = ids;
-          } else {
-            filterIds = contactsFilterIds;
-          }
-      }
-
-      const data = await fetchRanking(period, user.id, filterIds);
-      setRankingData(data);
-    } finally {
-      setRefreshing(false);
-      setIsLoading(false);
-    }
-  }, [period, scope, user, contactsFilterIds, loadContactIds]);
-
-  // Load Ranking
+  // Load contacts only when scope changes to contacts
   useEffect(() => {
-    if (!user) return;
-    setIsLoading(true);
-    loadRanking();
-  }, [loadRanking, user]);
+    if (scope === 'contacts' && !contactsFilterIds) {
+      loadContactIds().then(setContactsFilterIds);
+    }
+  }, [scope, loadContactIds, contactsFilterIds]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadRanking(true);
-  }, [loadRanking]);
+    if (scope === 'contacts') {
+      loadContactIds().then(ids => {
+        setContactsFilterIds(ids);
+        refresh();
+        setRefreshing(false);
+      });
+    } else {
+      refresh().then(() => setRefreshing(false));
+    }
+  }, [refresh, scope, loadContactIds]);
 
   const renderItem = useCallback(({ item, index }: { item: RankingUser; index: number }) => (
     <RankItem item={item} index={index} styles={styles} router={router} />

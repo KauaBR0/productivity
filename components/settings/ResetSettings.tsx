@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Alert } from 'react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { RotateCcw } from 'lucide-react-native';
-import { PressableScale } from '../PressableScale';
+import { PressableScale } from '@/components/PressableScale';
 
 interface ResetSettingsProps {
   styles: any;

@@ -3,7 +3,7 @@ import { View, Text, TextInput, ActivityIndicator, Platform, AppState, Pressable
 import { useSettings } from '@/context/SettingsContext';
 import { Shield, ShieldCheck, Search, Check } from 'lucide-react-native';
 import { getInstalledApps, isAccessibilityEnabled, isAppBlockerAvailable, openAccessibilitySettings, InstalledApp } from '@/services/AppBlockerService';
-import { PressableScale } from '../PressableScale';
+import { PressableScale } from '@/components/PressableScale';
 import { Theme } from '@/constants/theme';
 
 interface AppBlockerSettingsProps {

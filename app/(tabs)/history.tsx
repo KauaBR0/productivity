@@ -9,6 +9,14 @@ import { Theme } from '@/constants/theme';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 
+interface HistoryItem {
+  id: number;
+  label: string;
+  minutes: number;
+  started_at: string;
+  completed_at: string;
+}
+
 const HistorySkeleton = ({ styles }: { styles: any }) => (
   <View style={styles.listContent}>
     {[1, 2, 3, 4, 5].map((i) => (

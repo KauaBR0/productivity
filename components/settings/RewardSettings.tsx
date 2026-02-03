@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { Plus, Trash2 } from 'lucide-react-native';
-import { PressableScale } from '../PressableScale';
+import { PressableScale } from '@/components/PressableScale';
 
 interface RewardSettingsProps {
   styles: any;

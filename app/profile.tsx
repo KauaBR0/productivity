@@ -10,6 +10,7 @@ import { SocialService } from '@/services/SocialService';
 import { X, Camera, LogOut, Save, Trophy, Lock, Flame, Clock, CheckCircle, ChevronRight, Users, Footprints, Target, Medal, Star, Crown, Zap, Rocket, Shield, Gem } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useProfile } from '@/hooks/useProfile';
 
 const ProfileSkeleton = ({ styles }: { styles: any }) => (
   <View style={styles.container}>
@@ -207,17 +208,15 @@ export default function ProfileScreen() {
   const { theme } = useSettings();
   const styles = useMemo(() => createStyles(theme), [theme]);
   
+  const { profile, loading, refresh } = useProfile(user?.id);
   const [name, setName] = useState(user?.name || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [isEditing, setIsEditing] = useState(false);
-  const [followersCount, setFollowersCount] = useState(0);
   const [friendsCount, setFriendsCount] = useState(0);
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [showAchievementModal, setShowAchievementModal] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   const weeklyStats = useMemo(() => {
-    // ... (omitted weeklyStats calculation)
     const today = new Date();
     const days = Array.from({ length: 7 }).map((_, index) => {
       const date = new Date(today);
@@ -268,21 +267,9 @@ export default function ProfileScreen() {
 
   useEffect(() => {
       if (user) {
-          const loadData = async () => {
-              try {
-                  const [profile, friends] = await Promise.all([
-                      SocialService.getUserProfile(user.id, user.id),
-                      SocialService.getFriendsCount(user.id)
-                  ]);
-                  if (profile) setFollowersCount(profile.followers_count || 0);
-                  setFriendsCount(friends);
-              } catch (e) {
-                  console.error(e);
-              } finally {
-                  setLoading(false);
-              }
-          };
-          loadData();
+          SocialService.getFriendsCount(user.id).then(count => {
+              setFriendsCount(count);
+          });
       }
   }, [user]);
 
@@ -315,6 +302,7 @@ export default function ProfileScreen() {
     try {
       await updateProfile({ name, bio });
       setIsEditing(false);
+      refresh(); // Refresh hook data
       Alert.alert("Sucesso", "Perfil atualizado!");
     } catch {
       Alert.alert("Erro", "Falha ao atualizar perfil.");
@@ -366,7 +354,7 @@ export default function ProfileScreen() {
           <Text style={styles.emailText}>{user.email}</Text>
           <View style={styles.followersTag}>
               <Users color="#666" size={14} />
-              <Text style={styles.followersText}>{formatDecimal(followersCount)} Seguidores</Text>
+              <Text style={styles.followersText}>{formatDecimal(profile?.followers_count || 0)} Seguidores</Text>
           </View>
           <PressableScale style={styles.friendsLink} onPress={() => router.push('/friends' as any)}>
             <View style={styles.friendsLinkInfo}>

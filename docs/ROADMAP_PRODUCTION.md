@@ -6,7 +6,7 @@ Este documento descreve as melhorias necessárias para transformar o **Productiv
 - [x] **Refatorar `app/timer.tsx`**: Extrair lógica de timer para um hook customizado `hooks/useTimerLogic.ts`.
 - [x] **Refatorar `app/(tabs)/settings.tsx`**: Quebrar o arquivo em componentes menores na pasta `components/settings/`.
 - [ ] **Componentização UI**: Criar componentes de UI reutilizáveis (botões customizados, cards de ciclos) para evitar duplicação de estilos.
-- [ ] **Hooks para API**: Mover chamadas do Supabase de dentro dos componentes para serviços ou hooks (ex: `useProfile(id)`).
+- [x] **Hooks para API**: Criados `useProfile` e `useRanking` para abstrair carregamento, erros e loading do Supabase.
 
 ## ⚡ 2. Performance e Estado
 - [x] **Gerenciamento de Estado**: Migrado estado do timer para **Zustand** para evitar re-renders globais e permitir acesso síncrono app-wide.
@@ -15,7 +15,7 @@ Este documento descreve as melhorias necessárias para transformar o **Productiv
 
 ## 🔌 3. Robustez e Offline-First
 - [x] **Fila de Sincronização (Sync Queue)**: Implementar sistema que salva sessões localmente se a internet falhar e tenta re-sincronizar quando voltar.
-- [ ] **Detecção de Conexão**: Usar `@react-native-community/netinfo` para avisar o usuário quando ele estiver offline.
+- [x] **Detecção de Conexão**: Implementado componente global `OfflineNotice` que avisa quando a internet cai.
 - [x] **Cache de Perfil**: Estado do timer e perfil agora são restaurados globalmente via Zustand no startup.
 
 ## 📱 4. Google Play Store & Permissões
@@ -31,7 +31,7 @@ Este documento descreve as melhorias necessárias para transformar o **Productiv
 
 ## 📊 6. Banco de Dados (Supabase)
 - [x] **Denormalização de Perfil**: Adicionar colunas `total_focus_minutes` e `total_cycles` na tabela `profiles` (atualizadas via trigger ou RPC) para evitar somas pesadas. (Scripts: `docs/SUPABASE_DENORMALIZE_STATS.sql` e `docs/UPDATE_RPCS_DENORMALIZED.sql`)
-- [ ] **Segurança RLS**: Revisar todas as políticas para garantir que dados sensíveis (telefones) não vazem.
+- [x] **Segurança RLS**: Revisar todas as políticas para garantir que dados sensíveis (telefones) não vazem. (Script: `docs/SUPABASE_RLS_SECURITY_AUDIT.sql`)
 
 ---
 *Assinado: Gemini (Desenvolvedor Sênior)*

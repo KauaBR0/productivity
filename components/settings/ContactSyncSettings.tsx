@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { PhoneCall } from 'lucide-react-native';
-import { PressableScale } from '../PressableScale';
+import { PressableScale } from '@/components/PressableScale';
 import { Theme } from '@/constants/theme';
 
 interface ContactSyncSettingsProps {

@@ -3,7 +3,7 @@ import { View, Text, Pressable } from 'react-native';
 import { Audio } from 'expo-av';
 import { useSettings } from '@/context/SettingsContext';
 import { Volume2, Music2 } from 'lucide-react-native';
-import { PressableScale } from '../PressableScale';
+import { PressableScale } from '@/components/PressableScale';
 import { Theme } from '@/constants/theme';
 
 interface SoundSettingsProps {

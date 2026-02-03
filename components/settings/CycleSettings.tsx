@@ -4,7 +4,7 @@ import { CycleDef } from '@/constants/FocusConfig';
 import { useSettings } from '@/context/SettingsContext';
 import { Plus, X, Trash2, Infinity as InfinityIcon } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
-import { PressableScale } from '../PressableScale';
+import { PressableScale } from '@/components/PressableScale';
 import Toast from 'react-native-toast-message';
 
 interface CycleSettingsProps {
