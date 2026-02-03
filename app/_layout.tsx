@@ -11,6 +11,8 @@ import { SettingsProvider } from '@/context/SettingsContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { GamificationProvider } from '@/context/GamificationContext';
 import { useTimerStore } from '@/store/useTimerStore';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from '@/components/ToastConfig';
 
 // Configure Notifications Handler
 // ... (omitted setNotificationHandler)
@@ -75,6 +77,7 @@ export default function RootLayout() {
               <Stack.Screen name="user/[id]" options={{ animation: 'slide_from_right' }} />
             </Stack>
             <StatusBar style="light" />
+            <Toast config={toastConfig} />
           </ThemeProvider>
         </SettingsProvider>
       </GamificationProvider>

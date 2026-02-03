@@ -5,6 +5,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { Plus, X, Trash2, Infinity as InfinityIcon } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
 import { PressableScale } from '../PressableScale';
+import Toast from 'react-native-toast-message';
 
 interface CycleSettingsProps {
   theme: Theme;
@@ -33,7 +34,11 @@ export const CycleSettings: React.FC<CycleSettingsProps> = ({ theme, themeName, 
 
   const handleCreateCycle = () => {
       if (!newCycle.label?.trim()) {
-          Alert.alert("Erro", "O nome do ciclo é obrigatório.");
+          Toast.show({
+              type: 'error',
+              text1: 'Nome obrigatório',
+              text2: 'Por favor, dê um nome ao seu ciclo.',
+          });
           return;
       }
 

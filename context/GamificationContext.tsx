@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
 import { useNetInfo } from '@react-native-community/netinfo';
+import Toast from 'react-native-toast-message';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { ACHIEVEMENTS, LEVELS, UserStats } from '../constants/GamificationConfig';
@@ -188,7 +188,13 @@ export const GamificationProvider = ({ children }: { children: ReactNode }) => {
     newlyUnlockedIds.forEach((id) => {
       const achievement = ACHIEVEMENTS.find((item) => item.id === id);
       if (achievement) {
-        Alert.alert('🏆 Conquista Desbloqueada!', `${achievement.title}\n+${achievement.xpReward} XP`);
+        Toast.show({
+          type: 'achievement',
+          text1: achievement.title,
+          text2: `+${achievement.xpReward} XP`,
+          position: 'top',
+          topOffset: 60,
+        });
       }
     });
 
@@ -197,7 +203,13 @@ export const GamificationProvider = ({ children }: { children: ReactNode }) => {
     let newLevel = getLevelForXp(totalNewXp);
 
     if (newLevel > level) {
-      Alert.alert('🎉 LEVEL UP!', `Você alcançou o nível ${newLevel}!`);
+      Toast.show({
+        type: 'success',
+        text1: '🎉 LEVEL UP!',
+        text2: `Você alcançou o nível ${newLevel}!`,
+        position: 'top',
+        topOffset: 60,
+      });
     }
 
     // Update State
@@ -243,7 +255,12 @@ export const GamificationProvider = ({ children }: { children: ReactNode }) => {
 
         if (!isOnline) {
              console.log('Offline: Queuing data...');
-             Alert.alert('Modo Offline', 'Sessão salva localmente. Sincronizaremos quando a internet voltar.');
+             Toast.show({
+                type: 'info',
+                text1: 'Modo Offline',
+                text2: 'Sessão salva localmente.',
+                position: 'bottom',
+             });
              await SyncQueue.addToQueue('INSERT_SESSION', sessionPayload);
              await SyncQueue.addToQueue('UPDATE_PROFILE', profilePayload);
         } else {
@@ -253,7 +270,12 @@ export const GamificationProvider = ({ children }: { children: ReactNode }) => {
 
                 if (sessionError) {
                     console.error('Supabase session insert error:', sessionError);
-                    Alert.alert('Erro de Sincronização', `Salvando na fila para tentar novamente: ${sessionError.message}`);
+                    Toast.show({
+                        type: 'error',
+                        text1: 'Erro de Sincronização',
+                        text2: 'Salvando na fila...',
+                        position: 'bottom',
+                    });
                     await SyncQueue.addToQueue('INSERT_SESSION', sessionPayload);
                     await SyncQueue.addToQueue('UPDATE_PROFILE', profilePayload);
                 } else {
