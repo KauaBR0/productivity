@@ -9,7 +9,8 @@ import { useGamification } from '@/context/GamificationContext';
 import { Play, Settings, Plus, Edit2, Sparkles, BarChart3, RotateCcw } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import { Theme } from '@/constants/theme';
-import { ACTIVE_TIMER_STORAGE_KEY, StoredTimerState } from '@/types/timer';
+import { StoredTimerState } from '@/types/timer';
+import { useTimerStore } from '@/store/useTimerStore';
 
 const PressableScale = ({
   onPress,
@@ -62,28 +63,14 @@ export default function HomeScreen() {
     return value.toFixed(2).replace('.', ',');
   };
 
-  const [activeTimerState, setActiveTimerState] = useState<StoredTimerState | null>(null);
+  const { timeLeft, isActive, cycleId: activeCycleId } = useTimerStore();
+  const activeTimerCycle = useMemo(() => activeCycleId ? cycles.find(c => c.id === activeCycleId) : null, [activeCycleId, cycles]);
 
-  useFocusEffect(
-    useCallback(() => {
-      const checkActiveTimer = async () => {
-        try {
-          const raw = await AsyncStorage.getItem(ACTIVE_TIMER_STORAGE_KEY);
-          if (raw) {
-            const state = JSON.parse(raw);
-            setActiveTimerState(state);
-          } else {
-            setActiveTimerState(null);
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      };
-      checkActiveTimer();
-    }, [])
-  );
-
-  const activeTimerCycle = activeTimerState ? cycles.find(c => c.id === activeTimerState.cycleId) : null;
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -159,18 +146,18 @@ export default function HomeScreen() {
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Resume Active Session Banner */}
-          {activeTimerState && (
+          {activeCycleId && isActive && (
             <PressableScale
               style={styles.resumeBanner}
-              onPress={() => router.push({ pathname: '/timer', params: { cycleId: activeTimerState.cycleId } })}
+              onPress={() => router.push({ pathname: '/timer', params: { cycleId: activeCycleId } })}
             >
               <View style={styles.resumeIcon}>
                 <RotateCcw color="#000" size={20} />
               </View>
               <View style={styles.resumeInfo}>
-                <Text style={styles.resumeLabel}>Sessão em andamento</Text>
+                <Text style={styles.resumeLabel}>Sessão em andamento • {formatTime(timeLeft)}</Text>
                 <Text style={styles.resumeTitle}>
-                  {activeTimerCycle?.label || (activeTimerState.isInfiniteCycle ? 'Modo Infinito' : 'Ciclo')}
+                  {activeTimerCycle?.label || 'Ciclo'}
                 </Text>
               </View>
               <View style={styles.resumeAction}>

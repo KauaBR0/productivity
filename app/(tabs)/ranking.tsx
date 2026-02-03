@@ -37,6 +37,56 @@ const PressableScale = ({
   );
 };
 
+const RankItem = React.memo(({ item, index, styles, router }: { item: RankingUser; index: number; styles: any; router: any }) => {
+  const isTop3 = index < 3;
+  let medalColor = '#333';
+  let medalIcon = null;
+
+  if (index === 0) { medalColor = '#FFD700'; medalIcon = '🥇'; } // Gold
+  if (index === 1) { medalColor = '#C0C0C0'; medalIcon = '🥈'; } // Silver
+  if (index === 2) { medalColor = '#CD7F32'; medalIcon = '🥉'; } // Bronze
+
+  return (
+    <PressableScale 
+      style={[styles.rankItem, item.isUser && styles.userHighlight]}
+      onPress={() => item.isUser ? router.push('/profile') : router.push(`/user/${item.id}` as any)}
+    >
+      <View style={styles.rankLeft}>
+        <View style={[styles.positionContainer]}>
+          <Text style={[styles.positionText, { color: isTop3 ? medalColor : '#888' }]}>
+              {medalIcon ? medalIcon : index + 1}
+          </Text>
+        </View>
+        
+        <View style={[styles.avatar, { backgroundColor: item.avatarColor }]}>
+          {item.avatarUrl ? (
+              <Image source={{ uri: item.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+          ) : (
+              <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
+          )}
+        </View>
+
+        <View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.nameText, item.isUser && styles.userNameText]}>
+              {item.name} {item.isUser && '(Você)'}
+              </Text>
+              {item.isFocusing && (
+                  <View style={styles.fireTag}>
+                      <Text style={{fontSize: 12}}>🔥</Text>
+                  </View>
+              )}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.rankRight}>
+        <Text style={styles.timeText}>{formatTimeDisplay(item.minutes)}</Text>
+      </View>
+    </PressableScale>
+  );
+});
+
 export default function RankingScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -51,32 +101,6 @@ export default function RankingScreen() {
   const topThree = rankingData.slice(0, 3);
   const currentUser = rankingData.find((item) => item.isUser);
   const currentUserRank = currentUser ? rankingData.findIndex((item) => item.id === currentUser.id) + 1 : null;
-
-  // Realtime Subscription
-  useEffect(() => {
-    const channel = supabase
-      .channel('public:profiles')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'profiles' },
-        (payload) => {
-          const updatedProfile = payload.new;
-          setRankingData((currentData) => 
-            currentData.map((item) => {
-              if (item.id === updatedProfile.id) {
-                return { ...item, isFocusing: updatedProfile.is_focusing };
-              }
-              return item;
-            })
-          );
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
 
   const loadContactIds = useCallback(async () => {
     if (!user) return [];
@@ -161,55 +185,9 @@ export default function RankingScreen() {
     loadRanking();
   }, [loadRanking, user]);
 
-  const renderItem = ({ item, index }: { item: RankingUser; index: number }) => {
-    const isTop3 = index < 3;
-    let medalColor = '#333';
-    let medalIcon = null;
-
-    if (index === 0) { medalColor = '#FFD700'; medalIcon = '🥇'; } // Gold
-    if (index === 1) { medalColor = '#C0C0C0'; medalIcon = '🥈'; } // Silver
-    if (index === 2) { medalColor = '#CD7F32'; medalIcon = '🥉'; } // Bronze
-
-    return (
-      <PressableScale 
-        style={[styles.rankItem, item.isUser && styles.userHighlight]}
-        onPress={() => item.isUser ? router.push('/profile') : router.push(`/user/${item.id}` as any)}
-      >
-        <View style={styles.rankLeft}>
-          <View style={[styles.positionContainer]}>
-            <Text style={[styles.positionText, { color: isTop3 ? medalColor : '#888' }]}>
-                {medalIcon ? medalIcon : index + 1}
-            </Text>
-          </View>
-          
-          <View style={[styles.avatar, { backgroundColor: item.avatarColor }]}>
-            {item.avatarUrl ? (
-                <Image source={{ uri: item.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
-            ) : (
-                <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
-            )}
-          </View>
-
-          <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.nameText, item.isUser && styles.userNameText]}>
-                {item.name} {item.isUser && '(Você)'}
-                </Text>
-                {item.isFocusing && (
-                    <View style={styles.fireTag}>
-                        <Text style={{fontSize: 12}}>🔥</Text>
-                    </View>
-                )}
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.rankRight}>
-          <Text style={styles.timeText}>{formatTimeDisplay(item.minutes)}</Text>
-        </View>
-      </PressableScale>
-    );
-  };
+  const renderItem = useCallback(({ item, index }: { item: RankingUser; index: number }) => (
+    <RankItem item={item} index={index} styles={styles} router={router} />
+  ), [styles, router]);
 
 
   return (

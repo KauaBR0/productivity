@@ -10,20 +10,18 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SettingsProvider } from '@/context/SettingsContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { GamificationProvider } from '@/context/GamificationContext';
+import { useTimerStore } from '@/store/useTimerStore';
 
 // Configure Notifications Handler
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// ... (omitted setNotificationHandler)
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const restoreTimer = useTimerStore(s => s.restoreFromStorage);
+
+  useEffect(() => {
+    restoreTimer();
+  }, [restoreTimer]);
 
   useEffect(() => {
     // Request permissions on app load

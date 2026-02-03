@@ -2,8 +2,14 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import HomeScreen from '../app/(tabs)/index';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTimerStore } from '@/store/useTimerStore';
 
 // --- Mocks ---
+
+// Mock useTimerStore
+jest.mock('@/store/useTimerStore', () => ({
+  useTimerStore: jest.fn(),
+}));
 
 // Mock expo-router
 const mockPush = jest.fn();
@@ -66,61 +72,70 @@ jest.mock('@/types/timer', () => ({
 describe('HomeScreen Resume Banner', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: No active session
+    (useTimerStore as unknown as jest.Mock).mockReturnValue({
+      isActive: false,
+      timeLeft: 0,
+      cycleId: null,
+    });
   });
 
   it('renders Resume Banner when an active session is found in storage', async () => {
-    const mockState = {
-      version: 1,
-      cycleId: 'c1',
+    // Arrange: Mock store to have an active session
+    (useTimerStore as unknown as jest.Mock).mockReturnValue({
       isActive: true,
-      isInfiniteCycle: false,
-    };
-    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify(mockState));
+      timeLeft: 1500,
+      cycleId: 'c1',
+    });
 
     render(<HomeScreen />);
 
     await waitFor(() => {
-      expect(screen.getByText('Sessão em andamento')).toBeTruthy();
+      expect(screen.getByText(/Sessão em andamento/)).toBeTruthy();
       // Pomodoro appears multiple times (Hero, List, Banner), so we check getAll
       expect(screen.getAllByText('Pomodoro').length).toBeGreaterThan(1);
     });
   });
 
   it('renders Resume Banner for Infinite Mode', async () => {
-    const mockState = {
-      version: 1,
-      cycleId: 'infinite',
+    // Arrange
+    (useTimerStore as unknown as jest.Mock).mockReturnValue({
       isActive: true,
-      isInfiniteCycle: true,
-    };
-    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify(mockState));
+      timeLeft: 300,
+      cycleId: 'infinite',
+    });
 
     render(<HomeScreen />);
 
     await waitFor(() => {
-      expect(screen.getByText('Sessão em andamento')).toBeTruthy();
-      // Cycle label in mock is 'Infinito'
-      expect(screen.getByText('Infinito')).toBeTruthy();
+      expect(screen.getByText(/Sessão em andamento/)).toBeTruthy();
+      // Cycle label in mock is 'Infinito', which appears in carousel and banner
+      expect(screen.getAllByText('Infinito').length).toBeGreaterThan(1);
     });
   });
 
   it('does NOT render Resume Banner when storage is empty', async () => {
-    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
+    // Arrange
+    (useTimerStore as unknown as jest.Mock).mockReturnValue({
+      isActive: false,
+      timeLeft: 0,
+      cycleId: null,
+    });
 
     render(<HomeScreen />);
 
     await waitFor(() => {
-      expect(screen.queryByText('Sessão em andamento')).toBeNull();
+      expect(screen.queryByText(/Sessão em andamento/)).toBeNull();
     });
   });
 
   it('navigates to timer screen with correct params when Banner is clicked', async () => {
-    const mockState = {
-      version: 1,
-      cycleId: 'c1',
+    // Arrange
+    (useTimerStore as unknown as jest.Mock).mockReturnValue({
       isActive: true,
-    };
-    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify(mockState));
+      timeLeft: 1500,
+      cycleId: 'c1',
+    });
 
     render(<HomeScreen />);
 

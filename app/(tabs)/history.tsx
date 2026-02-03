@@ -41,6 +41,44 @@ interface HistoryItem {
   completed_at: string;
 }
 
+const HistoryItemComponent = React.memo(({ item, styles }: { item: HistoryItem; styles: any }) => {
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'Data desconhecida';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  };
+
+  const formatTime = (dateString: string) => {
+    if (!dateString) return '--:--';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.cardTitle}>{item.label || 'Ciclo de Foco'}</Text>
+        <View style={styles.dateContainer}>
+           <Calendar color="#666" size={14} />
+           <Text style={styles.dateText}>{formatDate(item.started_at || item.completed_at)}</Text>
+        </View>
+      </View>
+
+      <View style={styles.cardBody}>
+          <View style={styles.timeInfo}>
+              <Clock color="#A1A1AA" size={16} />
+              <Text style={styles.timeRange}>
+                  {item.started_at ? formatTime(item.started_at) : '?'} - {formatTime(item.completed_at)}
+              </Text>
+          </View>
+          <View style={styles.durationBadge}>
+              <Text style={styles.durationText}>{Number(item.minutes).toFixed(2).replace(/\.00$/, '')} min</Text>
+          </View>
+      </View>
+    </View>
+  );
+});
+
 export default function HistoryScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -48,6 +86,7 @@ export default function HistoryScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchHistory = useCallback(async () => {
     if (!user) return;
@@ -65,6 +104,7 @@ export default function HistoryScreen() {
       console.error('Error fetching history:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [user]);
 
@@ -72,43 +112,14 @@ export default function HistoryScreen() {
     fetchHistory();
   }, [fetchHistory]);
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'Data desconhecida';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-  };
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchHistory();
+  }, [fetchHistory]);
 
-  const formatTime = (dateString: string) => {
-    if (!dateString) return '--:--';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const renderItem = ({ item }: { item: HistoryItem }) => {
-    return (
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>{item.label || 'Ciclo de Foco'}</Text>
-          <View style={styles.dateContainer}>
-             <Calendar color="#666" size={14} />
-             <Text style={styles.dateText}>{formatDate(item.started_at || item.completed_at)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.cardBody}>
-            <View style={styles.timeInfo}>
-                <Clock color="#A1A1AA" size={16} />
-                <Text style={styles.timeRange}>
-                    {item.started_at ? formatTime(item.started_at) : '?'} - {formatTime(item.completed_at)}
-                </Text>
-            </View>
-            <View style={styles.durationBadge}>
-                <Text style={styles.durationText}>{Number(item.minutes).toFixed(2).replace(/\.00$/, '')} min</Text>
-            </View>
-        </View>
-      </View>
-    );
-  };
+  const renderItem = useCallback(({ item }: { item: HistoryItem }) => (
+    <HistoryItemComponent item={item} styles={styles} />
+  ), [styles]);
 
   return (
     <View style={styles.container}>
@@ -121,7 +132,7 @@ export default function HistoryScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {loading ? (
+      {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
             <ActivityIndicator color={theme.colors.accent} size="large" />
         </View>
@@ -131,6 +142,8 @@ export default function HistoryScreen() {
             renderItem={renderItem}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={styles.listContent}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
             ListEmptyComponent={
                 <View style={styles.emptyState}>
                   <View style={styles.emptyIcon}>

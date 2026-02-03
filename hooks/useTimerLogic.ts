@@ -12,6 +12,7 @@ import { useGamification } from '@/context/GamificationContext';
 import { startForegroundTimer, stopForegroundTimer, updateForegroundTimer } from '@/services/ForegroundTimerService';
 import { setSessionActive } from '@/services/AppBlockerService';
 import { ACTIVE_TIMER_STORAGE_KEY, StoredTimerState, TimerPhase } from '@/types/timer';
+import { useTimerStore } from '@/store/useTimerStore';
 
 export const useTimerLogic = () => {
   useKeepAwake();
@@ -20,53 +21,108 @@ export const useTimerLogic = () => {
   const { cycles, rewards, alarmSound, lofiTrack, rouletteExtraSpins } = useSettings();
   const { processCycleCompletion, setIsFocusing } = useGamification();
 
+  // Global State from Zustand
+  const {
+    timeLeft, setTimeLeft,
+    isActive, setIsActive,
+    phase, setPhase,
+    totalDuration, setTotalDuration,
+    cycleId: storeCycleId, setCycleId,
+    selectedReward, setSelectedReward,
+    recentRewards, setRecentRewards,
+    pendingRewardSeconds, setPendingRewardSeconds,
+    accumulatedFocusTime, setAccumulatedFocusTime,
+    accumulatedRewardTime, setAccumulatedRewardTime,
+    lastFocusSeconds, setLastFocusSeconds,
+    savedRewardSeconds, setSavedRewardSeconds,
+    isDeepFocus, setIsDeepFocus,
+    setTimerState,
+    restoreFromStorage
+  } = useTimerStore();
+
   // Find cycle config
   const cycle = cycles.find(c => c.id === cycleId) as CycleDef;
   const isInfiniteCycle = cycle?.id === 'infinite' || cycle?.type === 'infinite';
 
-  // State
-  const [phase, setPhase] = useState<TimerPhase>('focus');
-  const [timeLeft, setTimeLeft] = useState(
-    cycle ? (isInfiniteCycle ? 0 : cycle.focusDuration * 60) : 0
-  );
-  const [isActive, setIsActive] = useState(true);
-  const [selectedReward, setSelectedReward] = useState<string | null>(null);
-  const [endTime, setEndTime] = useState<number | null>(
-    cycle ? (isInfiniteCycle ? null : Date.now() + cycle.focusDuration * 60 * 1000) : null
-  );
-  
+  // Refs and non-store state
+  const [endTime, setEndTime] = useState<number | null>(null);
   const scheduledNotificationIdRef = useRef<string | null>(null);
   const focusStartRef = useRef<number | null>(null);
   const focusAccumulatedRef = useRef(0);
-  const [lastFocusSeconds, setLastFocusSeconds] = useState(0);
-  const [pendingRewardSeconds, setPendingRewardSeconds] = useState<number | null>(null);
-  const [savedRewardSeconds, setSavedRewardSeconds] = useState(0);
   const shouldPersistRef = useRef(true);
   const shouldKeepFocusRef = useRef(false);
 
-  // Modals & UI State
+  // UI State (Modals)
   const [showOneMoreModal, setShowOneMoreModal] = useState(false);
   const [showRewardEndModal, setShowRewardEndModal] = useState(false);
   const [showRestEndModal, setShowRestEndModal] = useState(false);
-  const [accumulatedFocusTime, setAccumulatedFocusTime] = useState(cycle ? cycle.focusDuration : 0);
-  const [accumulatedRewardTime, setAccumulatedRewardTime] = useState(cycle ? cycle.rewardDuration : 0);
-  const [isDeepFocus, setIsDeepFocus] = useState(false);
+  
   const lofiSoundRef = useRef<Audio.Sound | null>(null);
   const [isLofiMuted, setIsLofiMuted] = useState(false);
-  const [recentRewards, setRecentRewards] = useState<string[]>([]);
   const lastForegroundUpdateRef = useRef(0);
   const lastBlockerActiveRef = useRef<boolean | null>(null);
 
+  // Initialize / Restore
+  useEffect(() => {
+    const init = async () => {
+      if (!cycle) return;
+      
+      // If store is already active with this cycle, just sync endTime
+      if (storeCycleId === cycle.id && isActive) {
+        if (!isInfiniteCycle && !endTime && timeLeft > 0) {
+          setEndTime(Date.now() + timeLeft * 1000);
+        }
+        return;
+      }
+
+      // Try to restore from storage first
+      const restored = await restoreFromStorage();
+      
+      if (!restored || storeCycleId !== cycle.id) {
+        // New session initialization
+        setCycleId(cycle.id as string);
+        const initialTime = isInfiniteCycle ? 0 : cycle.focusDuration * 60;
+        
+        setTimerState({
+          phase: 'focus',
+          isActive: true,
+          timeLeft: initialTime,
+          totalDuration: Math.max(1, initialTime),
+          accumulatedFocusTime: cycle.focusDuration,
+          accumulatedRewardTime: cycle.rewardDuration,
+          selectedReward: null,
+          pendingRewardSeconds: null,
+          lastFocusSeconds: 0,
+          savedRewardSeconds: 0,
+          isDeepFocus: false,
+        });
+
+        if (!isInfiniteCycle) {
+          setEndTime(Date.now() + initialTime * 1000);
+        } else {
+          focusStartRef.current = Date.now();
+          focusAccumulatedRef.current = 0;
+        }
+      }
+    };
+
+    void init();
+  }, [cycle, storeCycleId]);
+
+  // Sync Focus Refs for Infinite Timer when store values change (like on resume)
+  useEffect(() => {
+    if (isInfiniteCycle && phase === 'focus' && isActive && !focusStartRef.current) {
+       focusAccumulatedRef.current = timeLeft;
+       focusStartRef.current = Date.now();
+    }
+  }, [isInfiniteCycle, phase, isActive]);
+
   // Animation State
-  const [totalDuration, setTotalDuration] = useState(
-    cycle ? (isInfiniteCycle ? 1 : cycle.focusDuration * 60) : 1
-  );
   const progress = useSharedValue(1);
   const pulseAnim = useRef(new RNAnimated.Value(0)).current;
   const buttonScale = useRef(new RNAnimated.Value(1)).current;
 
-  // --- Logic ---
-
+  // Persistence Logic
   const buildStoredState = useCallback((): StoredTimerState | null => {
     if (!cycle) return null;
     return {
@@ -90,21 +146,9 @@ export const useTimerLogic = () => {
       savedRewardSeconds,
     };
   }, [
-    cycle,
-    phase,
-    isActive,
-    isInfiniteCycle,
-    endTime,
-    timeLeft,
-    totalDuration,
-    selectedReward,
-    recentRewards,
-    pendingRewardSeconds,
-    accumulatedFocusTime,
-    accumulatedRewardTime,
-    lastFocusSeconds,
-    isDeepFocus,
-    savedRewardSeconds,
+    cycle, phase, isActive, isInfiniteCycle, endTime, timeLeft, totalDuration,
+    selectedReward, recentRewards, pendingRewardSeconds, accumulatedFocusTime,
+    accumulatedRewardTime, lastFocusSeconds, isDeepFocus, savedRewardSeconds
   ]);
 
   const persistTimerState = useCallback(async () => {
@@ -190,64 +234,6 @@ export const useTimerLogic = () => {
     }
   }, [phase, isDeepFocus]);
 
-  // Restore State
-  useEffect(() => {
-    const restoreTimerState = async () => {
-      if (!cycle) return;
-      try {
-        const raw = await AsyncStorage.getItem(ACTIVE_TIMER_STORAGE_KEY);
-        if (!raw) return;
-        const saved = JSON.parse(raw) as StoredTimerState;
-        if (saved.cycleId !== cycle.id) return;
-
-        setPhase(saved.phase);
-        setIsActive(saved.isActive);
-        setSelectedReward(saved.selectedReward ?? null);
-        setRecentRewards(saved.recentRewards ?? []);
-        setPendingRewardSeconds(saved.pendingRewardSeconds ?? null);
-        setAccumulatedFocusTime(
-          Number.isFinite(saved.accumulatedFocusTime) ? saved.accumulatedFocusTime : cycle.focusDuration,
-        );
-        setAccumulatedRewardTime(
-          Number.isFinite(saved.accumulatedRewardTime) ? saved.accumulatedRewardTime : cycle.rewardDuration,
-        );
-        setLastFocusSeconds(saved.lastFocusSeconds ?? 0);
-        setIsDeepFocus(saved.isDeepFocus ?? false);
-        setSavedRewardSeconds(saved.savedRewardSeconds ?? 0);
-        focusAccumulatedRef.current = saved.focusAccumulatedSeconds ?? 0;
-        focusStartRef.current = saved.focusStartTime ?? null;
-
-        const fallbackDuration = Math.max(1, saved.timeLeft ?? 1);
-        if (saved.isActive) {
-          if (saved.isInfiniteCycle && saved.phase === 'focus') {
-            const base = saved.focusAccumulatedSeconds ?? 0;
-            const start = saved.focusStartTime;
-            const elapsed = start ? base + Math.floor((Date.now() - start) / 1000) : base;
-            setTimeLeft(elapsed);
-            setTotalDuration(Math.max(1, elapsed));
-            setEndTime(null);
-            return;
-          }
-          if (saved.endTime) {
-            const remaining = Math.max(0, Math.ceil((saved.endTime - Date.now()) / 1000));
-            setTimeLeft(remaining);
-            setTotalDuration(saved.totalDuration || Math.max(1, remaining));
-            setEndTime(saved.endTime);
-            return;
-          }
-        }
-
-        setTimeLeft(saved.timeLeft ?? 0);
-        setTotalDuration(saved.totalDuration || fallbackDuration);
-        setEndTime(saved.isActive ? saved.endTime ?? null : null);
-      } catch (error) {
-        console.log('Failed to restore timer state', error);
-      }
-    };
-
-    void restoreTimerState();
-  }, [cycle]);
-
   useEffect(() => {
     return () => {
       if (!shouldPersistRef.current) return;
@@ -267,15 +253,10 @@ export const useTimerLogic = () => {
   const playAlarm = useCallback(async () => {
     if (alarmSound !== 'alarm') return;
     try {
-      const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/alarm.mp3')
-      );
+      const { sound } = await Audio.Sound.createAsync(require('../assets/sounds/alarm.mp3'));
       await sound.playAsync();
-      
       sound.setOnPlaybackStatusUpdate(async (status) => {
-          if (status.isLoaded && status.didJustFinish) {
-              await sound.unloadAsync();
-          }
+          if (status.isLoaded && status.didJustFinish) await sound.unloadAsync();
       });
     } catch (error) {
       console.log('Error playing sound', error);
@@ -297,17 +278,13 @@ export const useTimerLogic = () => {
 
   const playLofi = useCallback(async () => {
     if (phase !== 'focus' || !isActive || showOneMoreModal || showRewardEndModal || showRestEndModal) return;
-    if (lofiTrack === 'off') return;
-    if (isLofiMuted) return;
-    if (lofiSoundRef.current) return;
+    if (lofiTrack === 'off' || isLofiMuted || lofiSoundRef.current) return;
     try {
       const tracks = {
         lofi1: require('../assets/sounds/lofi1.mp3'),
         lofi2: require('../assets/sounds/lofi2.mp3'),
       };
-      const track = lofiTrack === 'random'
-        ? (Math.random() < 0.5 ? tracks.lofi1 : tracks.lofi2)
-        : tracks[lofiTrack];
+      const track = lofiTrack === 'random' ? (Math.random() < 0.5 ? tracks.lofi1 : tracks.lofi2) : tracks[lofiTrack];
       const { sound } = await Audio.Sound.createAsync(track, { shouldPlay: true, isLooping: true, volume: 0.5 });
       lofiSoundRef.current = sound;
     } catch (error) {
@@ -324,9 +301,7 @@ export const useTimerLogic = () => {
   }, [phase, isActive, showOneMoreModal, showRewardEndModal, showRestEndModal, isLofiMuted, playLofi, stopLofi]);
 
   useEffect(() => {
-    return () => {
-      void stopLofi();
-    };
+    return () => { void stopLofi(); };
   }, [stopLofi]);
 
   // Notifications & Foreground Service
@@ -343,22 +318,11 @@ export const useTimerLogic = () => {
   }, []);
 
   const getPhaseNotificationContent = useCallback(() => {
-    // Basic content based on phase, refined in component but kept here for logic
-    // We can't access phaseConfig (theme) easily here without passing it or moving it.
-    // Simpler texts for now or move phaseConfig to hook/constant.
     let title = 'Fase finalizada';
     let body = 'Hora de seguir para a próxima etapa.';
-
-    if (phase === 'focus') {
-      title = 'Tempo de foco acabou! 🚨';
-      body = 'Vamos escolher sua recompensa.';
-    } else if (phase === 'reward') {
-      title = 'Recompensa finalizada! ⏱️';
-      body = 'Hora de voltar para a rotina.';
-    } else if (phase === 'rest') {
-      title = 'Descanso finalizado! ✅';
-      body = 'Pronto para o próximo ciclo.';
-    }
+    if (phase === 'focus') { title = 'Tempo de foco acabou! 🚨'; body = 'Vamos escolher sua recompensa.'; }
+    else if (phase === 'reward') { title = 'Recompensa finalizada! ⏱️'; body = 'Hora de voltar para a rotina.'; }
+    else if (phase === 'rest') { title = 'Descanso finalizado! ✅'; body = 'Pronto para o próximo ciclo.'; }
     return { title, body };
   }, [phase]);
 
@@ -366,16 +330,8 @@ export const useTimerLogic = () => {
     const { title, body } = getPhaseNotificationContent();
     try {
       const id = await Notifications.scheduleNotificationAsync({
-        content: {
-          title,
-          body,
-          sound: alarmSound === 'alarm' ? 'alarm.mp3' : undefined,
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-          seconds,
-          repeats: false,
-        },
+        content: { title, body, sound: alarmSound === 'alarm' ? 'alarm.mp3' : undefined },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, repeats: false },
       });
       scheduledNotificationIdRef.current = id;
     } catch (error) {
@@ -385,37 +341,25 @@ export const useTimerLogic = () => {
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const getForegroundStatus = useCallback(() => {
     const cycleName = cycle?.label ? cycle.label : 'Ciclo';
     const modeTag = isInfiniteCycle ? 'Modo infinito' : null;
-    const descSuffix = isInfiniteCycle && phase === 'focus'
-      ? `Decorrido ${formatTime(timeLeft)}`
-      : `Restante ${formatTime(timeLeft)}`;
+    const descSuffix = isInfiniteCycle && phase === 'focus' ? `Decorrido ${formatTime(timeLeft)}` : `Restante ${formatTime(timeLeft)}`;
     const desc = modeTag ? `${cycleName} • ${modeTag} • ${descSuffix}` : `${cycleName} • ${descSuffix}`;
-
-    if (phase === 'focus') {
-      return { title: 'Foco ativo', desc };
-    }
-    if (phase === 'reward') {
-      return { title: 'Recompensa ativa', desc };
-    }
-    if (phase === 'rest') {
-      return { title: 'Descanso ativo', desc };
-    }
+    if (phase === 'focus') return { title: 'Foco ativo', desc };
+    if (phase === 'reward') return { title: 'Recompensa ativa', desc };
+    if (phase === 'rest') return { title: 'Descanso ativo', desc };
     return { title: 'Timer ativo', desc };
   }, [phase, timeLeft, cycle, isInfiniteCycle]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const shouldRun = isActive && phase !== 'selection' && !showOneMoreModal && !showRewardEndModal && !showRestEndModal;
-    if (!shouldRun) {
-      void stopForegroundTimer();
-      return;
-    }
+    if (!shouldRun) { void stopForegroundTimer(); return; }
     const { title, desc } = getForegroundStatus();
     void startForegroundTimer(title, desc);
   }, [isActive, phase, showOneMoreModal, showRewardEndModal, showRestEndModal, getForegroundStatus]);
@@ -441,13 +385,10 @@ export const useTimerLogic = () => {
     if (!endTime) return;
     const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
     setTimeLeft(remaining);
-  }, [endTime]);
+  }, [endTime, setTimeLeft]);
 
   useEffect(() => {
     if (!isInfiniteCycle || phase !== 'focus' || !isActive) return;
-    if (!focusStartRef.current) {
-      focusStartRef.current = Date.now();
-    }
     const tick = () => {
       const elapsed = getFocusElapsedSeconds();
       setTimeLeft(elapsed);
@@ -456,18 +397,14 @@ export const useTimerLogic = () => {
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [isInfiniteCycle, phase, isActive, getFocusElapsedSeconds]);
+  }, [isInfiniteCycle, phase, isActive, getFocusElapsedSeconds, setTimeLeft, setTotalDuration]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     if (isActive && endTime && phase !== 'selection') {
-      interval = setInterval(() => {
-        updateTimeLeft();
-      }, 1000);
+      interval = setInterval(() => { updateTimeLeft(); }, 1000);
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    return () => { if (interval) clearInterval(interval); };
   }, [isActive, endTime, phase, updateTimeLeft]);
 
   useEffect(() => {
@@ -487,13 +424,11 @@ export const useTimerLogic = () => {
           const elapsed = getFocusElapsedSeconds();
           setTimeLeft(elapsed);
           setTotalDuration(Math.max(1, elapsed));
-        } else {
-          updateTimeLeft();
-        }
+        } else { updateTimeLeft(); }
       }
     });
     return () => subscription.remove();
-  }, [updateTimeLeft, isInfiniteCycle, phase, getFocusElapsedSeconds]);
+  }, [updateTimeLeft, isInfiniteCycle, phase, getFocusElapsedSeconds, setTimeLeft, setTotalDuration]);
 
   // Handlers
   const handlePhaseEnd = useCallback(() => {
@@ -503,47 +438,21 @@ export const useTimerLogic = () => {
     setEndTime(null);
     void cancelScheduledNotification();
 
-    if (isInfiniteCycle && phase === 'reward') {
-      playAlarm();
-      Vibration.vibrate([0, 500, 200, 500]);
-      return;
-    }
-    if (isInfiniteCycle && phase === 'rest') {
-      playAlarm();
-      Vibration.vibrate([0, 500, 200, 500]);
-      setShowRestEndModal(true);
-      return;
-    }
+    if (isInfiniteCycle && phase === 'reward') { playAlarm(); Vibration.vibrate([0, 500, 200, 500]); return; }
+    if (isInfiniteCycle && phase === 'rest') { playAlarm(); Vibration.vibrate([0, 500, 200, 500]); setShowRestEndModal(true); return; }
 
-    if (phase === 'focus') {
-      playAlarm(); 
-      Vibration.vibrate([0, 500, 200, 500]); 
-      setShowOneMoreModal(true); 
-    } else if (phase === 'reward') {
-      playAlarm();
-      Vibration.vibrate([0, 500, 200, 500]);
-      setShowRewardEndModal(true);
-    } else if (phase === 'rest') {
-      playAlarm();
-      Vibration.vibrate([0, 500, 200, 500]);
+    if (phase === 'focus') { playAlarm(); Vibration.vibrate([0, 500, 200, 500]); setShowOneMoreModal(true); } 
+    else if (phase === 'reward') { playAlarm(); Vibration.vibrate([0, 500, 200, 500]); setShowRewardEndModal(true); } 
+    else if (phase === 'rest') {
+      playAlarm(); Vibration.vibrate([0, 500, 200, 500]);
       Alert.alert("Ciclo Completo!", "Parabéns, você finalizou o ciclo.", [
-        {
-          text: "Voltar ao Início",
-          onPress: async () => {
-            shouldPersistRef.current = false;
-            shouldKeepFocusRef.current = false;
-            await clearTimerState();
-            router.back();
-          },
-        },
+        { text: "Voltar ao Início", onPress: async () => { shouldPersistRef.current = false; shouldKeepFocusRef.current = false; await clearTimerState(); router.back(); }, },
       ]);
     }
-  }, [isActive, isInfiniteCycle, phase, cancelScheduledNotification, clearTimerState, playAlarm, router]);
+  }, [isActive, isInfiniteCycle, phase, cancelScheduledNotification, clearTimerState, playAlarm, router, setIsActive]);
 
   useEffect(() => {
-    if (isActive && timeLeft === 0 && phase !== 'selection') {
-      handlePhaseEnd();
-    }
+    if (isActive && timeLeft === 0 && phase !== 'selection') { handlePhaseEnd(); }
   }, [isActive, timeLeft, phase, handlePhaseEnd]);
 
   const handleFinishFocus = async () => {
@@ -579,9 +488,7 @@ export const useTimerLogic = () => {
   };
 
   const startInfiniteFocus = useCallback(async () => {
-    if (phase === 'reward') {
-      setSavedRewardSeconds(prev => prev + timeLeft);
-    }
+    if (phase === 'reward') setSavedRewardSeconds(prev => prev + timeLeft);
     setSelectedReward(null);
     setPhase('focus');
     setIsActive(true);
@@ -592,12 +499,9 @@ export const useTimerLogic = () => {
     focusAccumulatedRef.current = 0;
     focusStartRef.current = Date.now();
     await cancelScheduledNotification();
-  }, [cancelScheduledNotification, phase, timeLeft]);
+  }, [cancelScheduledNotification, phase, timeLeft, setPhase, setIsActive, setTimeLeft, setTotalDuration, setSelectedReward, setLastFocusSeconds, setSavedRewardSeconds]);
 
-  const handleFinishRest = async () => {
-      setShowRestEndModal(false);
-      await startInfiniteFocus();
-  };
+  const handleFinishRest = async () => { setShowRestEndModal(false); await startInfiniteFocus(); };
 
   const handleOneMore = (focusAdd: number, rewardAdd: number) => {
     setShowOneMoreModal(false);
@@ -610,17 +514,13 @@ export const useTimerLogic = () => {
     setIsActive(true);
   };
 
-  const getProportionalSeconds = useCallback((focusSeconds: number, ratio: number) => {
-    const raw = Math.round(focusSeconds * ratio);
-    return Math.max(1, raw);
-  }, []);
+  const getProportionalSeconds = useCallback((focusSeconds: number, ratio: number) => { const raw = Math.round(focusSeconds * ratio); return Math.max(1, raw); }, []);
 
   const handleInfiniteToReward = useCallback(() => {
     if (!cycle) return;
     const focusSeconds = Math.max(1, getFocusElapsedSeconds());
     const focusBaseMinutes = cycle ? Math.max(cycle.focusDuration, 0.01) : 1;
     const rewardRatio = cycle ? cycle.rewardDuration / focusBaseMinutes : 0;
-    
     focusAccumulatedRef.current = focusSeconds;
     focusStartRef.current = null;
     setLastFocusSeconds(focusSeconds);
@@ -634,17 +534,14 @@ export const useTimerLogic = () => {
     setIsActive(false);
     setEndTime(null);
     void cancelScheduledNotification();
-  }, [cycle, getFocusElapsedSeconds, getProportionalSeconds, processCycleCompletion, cancelScheduledNotification, savedRewardSeconds]);
+  }, [cycle, getFocusElapsedSeconds, getProportionalSeconds, processCycleCompletion, cancelScheduledNotification, savedRewardSeconds, setPhase, setIsActive, setLastFocusSeconds, setPendingRewardSeconds, setSavedRewardSeconds]);
 
   const handleInfiniteToRest = useCallback(() => {
     if (!cycle) return;
     const focusBaseMinutes = cycle ? Math.max(cycle.focusDuration, 0.01) : 1;
     const restRatio = cycle ? cycle.restDuration / focusBaseMinutes : 0;
-    
     const focusSeconds = lastFocusSeconds > 0 ? lastFocusSeconds : Math.max(1, getFocusElapsedSeconds());
-    if (lastFocusSeconds <= 0) {
-      setLastFocusSeconds(focusSeconds);
-    }
+    if (lastFocusSeconds <= 0) setLastFocusSeconds(focusSeconds);
     const restSeconds = getProportionalSeconds(focusSeconds, restRatio);
     setSelectedReward(null);
     setPhase('rest');
@@ -653,7 +550,7 @@ export const useTimerLogic = () => {
     setEndTime(Date.now() + restSeconds * 1000);
     setIsActive(true);
     void cancelScheduledNotification();
-  }, [cycle, lastFocusSeconds, getFocusElapsedSeconds, getProportionalSeconds, cancelScheduledNotification]);
+  }, [cycle, lastFocusSeconds, getFocusElapsedSeconds, getProportionalSeconds, cancelScheduledNotification, setPhase, setTimeLeft, setTotalDuration, setIsActive, setLastFocusSeconds, setSelectedReward]);
 
   const startReward = (reward: string, rewardSecondsOverride?: number) => {
     setRecentRewards(prev => [reward, ...prev].slice(0, 5));
@@ -681,11 +578,7 @@ export const useTimerLogic = () => {
       void cancelScheduledNotification();
       return;
     }
-    if (!endTime) {
-      setIsActive(false);
-      void stopForegroundTimer();
-      return;
-    }
+    if (!endTime) { setIsActive(false); void stopForegroundTimer(); return; }
     const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
     setTimeLeft(remaining);
     setEndTime(null);
@@ -695,34 +588,17 @@ export const useTimerLogic = () => {
   };
 
   const resumeTimer = () => {
-    if (isInfiniteCycle && phase === 'focus') {
-      focusStartRef.current = Date.now();
-      setIsActive(true);
-      return;
-    }
+    if (isInfiniteCycle && phase === 'focus') { focusStartRef.current = Date.now(); setIsActive(true); return; }
     if (timeLeft <= 0) return;
     setEndTime(Date.now() + timeLeft * 1000);
     setIsActive(true);
   };
 
   const handleCancel = async () => {
-    Alert.alert(
-      "Sair do ciclo?",
-      "Você pode voltar para a home e continuar depois. O timer seguirá contando.",
-      [
+    Alert.alert("Sair do ciclo?", "Você pode voltar para a home e continuar depois. O timer seguirá contando.", [
         { text: "Cancelar", style: "cancel" },
-        {
-          text: "Continuar em background",
-          onPress: async () => {
-            shouldKeepFocusRef.current = phase === 'focus' && isActive && !showOneMoreModal;
-            await persistTimerState();
-            router.back();
-          },
-        },
-        {
-          text: "Encerrar ciclo",
-          style: "destructive",
-          onPress: async () => {
+        { text: "Continuar em background", onPress: async () => { shouldKeepFocusRef.current = phase === 'focus' && isActive && !showOneMoreModal; await persistTimerState(); router.back(); }, },
+        { text: "Encerrar ciclo", style: "destructive", onPress: async () => {
             shouldPersistRef.current = false;
             shouldKeepFocusRef.current = false;
             if (isInfiniteCycle && phase === 'focus' && cycle) {
@@ -743,15 +619,9 @@ export const useTimerLogic = () => {
   };
 
   const handleSkipRest = async () => {
-    Alert.alert(
-      "Pular descanso?",
-      "Você finalizará o ciclo agora.",
-      [
+    Alert.alert("Pular descanso?", "Você finalizará o ciclo agora.", [
         { text: "Cancelar", style: "cancel" },
-        {
-          text: "Finalizar",
-          style: "destructive",
-            onPress: async () => {
+        { text: "Finalizar", style: "destructive", onPress: async () => {
               setIsActive(false);
               setEndTime(null);
               shouldPersistRef.current = false;
@@ -767,13 +637,10 @@ export const useTimerLogic = () => {
   };
 
   const rouletteRewardMinutes = useMemo(() => {
-    if (isInfiniteCycle && pendingRewardSeconds) {
-      return Math.max(1, Math.round(pendingRewardSeconds / 60));
-    }
+    if (isInfiniteCycle && pendingRewardSeconds) return Math.max(1, Math.round(pendingRewardSeconds / 60));
     return accumulatedRewardTime;
   }, [isInfiniteCycle, pendingRewardSeconds, accumulatedRewardTime]);
 
-  // Helper values
   const canToggleTimer = !(isInfiniteCycle && phase !== 'focus' && timeLeft === 0);
   const instructionText = isInfiniteCycle && phase === 'focus'
     ? (isActive ? 'Foco contínuo' : 'Pausado')
@@ -782,57 +649,14 @@ export const useTimerLogic = () => {
       : (isActive ? 'O tempo está passando...' : 'Pausado');
 
   return {
-    // Data
-    cycle,
-    rewards,
-    theme: useSettings().theme, // Access theme directly
-    rouletteExtraSpins,
-    recentRewards,
-    
-    // State
-    phase,
-    timeLeft,
-    totalDuration,
-    isActive,
-    selectedReward,
-    isInfiniteCycle,
-    isLofiMuted,
-    isDeepFocus,
-    progress,
-    pulseAnim,
-    buttonScale,
-    
-    // Calculated
-    rouletteRewardMinutes,
-    pendingRewardSeconds,
-    instructionText,
-    canToggleTimer,
-    
-    // Modals
-    showOneMoreModal,
-    showRewardEndModal,
-    showRestEndModal,
-    
-    // Actions
+    cycle, rewards, theme: useSettings().theme, rouletteExtraSpins, recentRewards,
+    phase, timeLeft, totalDuration, isActive, selectedReward, isInfiniteCycle, isLofiMuted, isDeepFocus, progress, pulseAnim, buttonScale,
+    rouletteRewardMinutes, pendingRewardSeconds, instructionText, canToggleTimer,
+    showOneMoreModal, showRewardEndModal, showRestEndModal,
     toggleTimer: isActive ? pauseTimer : resumeTimer,
-    handleCancel,
-    setIsDeepFocus,
-    setIsLofiMuted,
-    
-    // Infinite Actions
-    handleInfiniteToReward,
-    handleInfiniteToRest,
-    startInfiniteFocus,
-    
-    // Modal Actions
-    handleFinishFocus,
-    handleOneMore,
-    handleStopReward,
-    handleExtendRest,
-    handleFinishRest,
-    handleSkipRest,
-    
-    // Reward Action
+    handleCancel, setIsDeepFocus, setIsLofiMuted,
+    handleInfiniteToReward, handleInfiniteToRest, startInfiniteFocus,
+    handleFinishFocus, handleOneMore, handleStopReward, handleExtendRest, handleFinishRest, handleSkipRest,
     startReward,
   };
 };

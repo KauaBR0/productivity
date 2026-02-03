@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity, Modal, Dimensions, Pressable,
 import Svg, { Circle } from 'react-native-svg';
 import { Gift, Brain, Coffee, Clock, Volume2, X, Play, Pause } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
+import { useSettings } from '@/context/SettingsContext';
 import RewardRoulette from '@/components/RewardRoulette';
 import { useTimerLogic } from '@/hooks/useTimerLogic';
 

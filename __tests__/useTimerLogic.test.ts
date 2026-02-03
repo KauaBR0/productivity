@@ -1,7 +1,8 @@
-import { renderHook, act } from '@testing-library/react-native';
+import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useTimerLogic } from '../hooks/useTimerLogic';
 import { useSettings } from '@/context/SettingsContext';
 import { useLocalSearchParams } from 'expo-router';
+import { useTimerStore } from '@/store/useTimerStore';
 
 // Mocks
 jest.mock('@/context/SettingsContext');
@@ -47,6 +48,9 @@ jest.mock('@/services/AppBlockerService', () => ({
 describe('useTimerLogic', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    act(() => {
+        useTimerStore.getState().resetStore();
+    });
     (useLocalSearchParams as jest.Mock).mockReturnValue({ cycleId: 'c1' });
     (useSettings as jest.Mock).mockReturnValue({
       cycles: [
@@ -58,19 +62,22 @@ describe('useTimerLogic', () => {
     });
   });
 
-  it('initializes with correct state for fixed cycle', () => {
+  it('initializes with correct state for fixed cycle', async () => {
     const { result } = renderHook(() => useTimerLogic());
     
-    expect(result.current.phase).toBe('focus');
-    expect(result.current.timeLeft).toBe(25 * 60);
+    await waitFor(() => {
+        expect(result.current.phase).toBe('focus');
+        expect(result.current.timeLeft).toBe(25 * 60);
+    });
+    
     expect(result.current.isActive).toBe(true);
     expect(result.current.isInfiniteCycle).toBe(false);
   });
 
-  it('toggles timer state', () => {
+  it('toggles timer state', async () => {
     const { result } = renderHook(() => useTimerLogic());
     
-    expect(result.current.isActive).toBe(true);
+    await waitFor(() => expect(result.current.isActive).toBe(true));
     
     act(() => {
       result.current.toggleTimer();
@@ -79,11 +86,13 @@ describe('useTimerLogic', () => {
     expect(result.current.isActive).toBe(false);
   });
 
-  it('initializes infinite cycle correctly', () => {
+  it('initializes infinite cycle correctly', async () => {
     (useLocalSearchParams as jest.Mock).mockReturnValue({ cycleId: 'infinite' });
     const { result } = renderHook(() => useTimerLogic());
 
-    expect(result.current.isInfiniteCycle).toBe(true);
-    expect(result.current.timeLeft).toBe(0);
+    await waitFor(() => {
+        expect(result.current.isInfiniteCycle).toBe(true);
+        expect(result.current.timeLeft).toBe(0);
+    });
   });
 });
