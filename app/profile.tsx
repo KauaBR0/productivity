@@ -9,6 +9,35 @@ import { ACHIEVEMENTS, Achievement } from '@/constants/GamificationConfig';
 import { SocialService } from '@/services/SocialService';
 import { X, Camera, LogOut, Save, Trophy, Lock, Flame, Clock, CheckCircle, ChevronRight, Users, Footprints, Target, Medal, Star, Crown, Zap, Rocket, Shield, Gem } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
+import { Skeleton } from '@/components/ui/Skeleton';
+
+const ProfileSkeleton = ({ styles }: { styles: any }) => (
+  <View style={styles.container}>
+    <View style={styles.header}>
+      <Skeleton width={80} height={24} />
+      <Skeleton width={40} height={40} borderRadius={12} />
+    </View>
+    <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.avatarSection}>
+        <Skeleton width={100} height={100} borderRadius={50} />
+        <Skeleton width={150} height={24} style={{ marginTop: 12 }} />
+        <Skeleton width={200} height={16} style={{ marginTop: 8 }} />
+      </View>
+      <View style={styles.progressSection}>
+        <Skeleton width="100%" height={12} borderRadius={6} />
+      </View>
+      <View style={styles.statsGrid}>
+        <Skeleton style={{ flex: 1 }} height={100} borderRadius={20} />
+        <Skeleton style={{ flex: 1 }} height={100} borderRadius={20} />
+        <Skeleton style={{ flex: 1 }} height={100} borderRadius={20} />
+      </View>
+      <View style={{ width: '90%', gap: 12, marginTop: 20 }}>
+        <Skeleton width="100%" height={120} borderRadius={22} />
+        <Skeleton width="100%" height={200} borderRadius={22} />
+      </View>
+    </ScrollView>
+  </View>
+);
 
 const formatDecimal = (value: number) => {
   if (!Number.isFinite(value)) return '0';
@@ -185,8 +214,10 @@ export default function ProfileScreen() {
   const [friendsCount, setFriendsCount] = useState(0);
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [showAchievementModal, setShowAchievementModal] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const weeklyStats = useMemo(() => {
+    // ... (omitted weeklyStats calculation)
     const today = new Date();
     const days = Array.from({ length: 7 }).map((_, index) => {
       const date = new Date(today);
@@ -237,12 +268,21 @@ export default function ProfileScreen() {
 
   useEffect(() => {
       if (user) {
-          SocialService.getUserProfile(user.id, user.id).then(p => {
-              if (p) setFollowersCount(p.followers_count || 0);
-          });
-          SocialService.getFriendsCount(user.id).then(count => {
-              setFriendsCount(count);
-          });
+          const loadData = async () => {
+              try {
+                  const [profile, friends] = await Promise.all([
+                      SocialService.getUserProfile(user.id, user.id),
+                      SocialService.getFriendsCount(user.id)
+                  ]);
+                  if (profile) setFollowersCount(profile.followers_count || 0);
+                  setFriendsCount(friends);
+              } catch (e) {
+                  console.error(e);
+              } finally {
+                  setLoading(false);
+              }
+          };
+          loadData();
       }
   }, [user]);
 
@@ -251,6 +291,7 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
+    // ... (omitted handleLogout)
     Alert.alert(
       "Sair",
       "Deseja realmente sair da sua conta?",
@@ -281,6 +322,7 @@ export default function ProfileScreen() {
   };
 
   if (!user) return null;
+  if (loading) return <ProfileSkeleton styles={styles} />;
 
   return (
     <View style={styles.container}>

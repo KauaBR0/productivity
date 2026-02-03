@@ -10,6 +10,26 @@ import { supabase } from '@/lib/supabase';
 import { UserPlus, Globe, Users, Crown, Sparkles, Users2, Phone } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
 import { normalizePhone } from '@/utils/phone';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
+
+const RankingSkeleton = ({ styles }: { styles: any }) => (
+  <View style={styles.listContent}>
+    {[1, 2, 3, 4, 5, 6].map((i) => (
+      <View key={i} style={styles.rankItem}>
+        <View style={styles.rankLeft}>
+          <Skeleton width={24} height={24} borderRadius={12} />
+          <Skeleton width={40} height={40} borderRadius={20} />
+          <View style={{ gap: 6 }}>
+            <Skeleton width={120} height={16} />
+            <Skeleton width={80} height={12} />
+          </View>
+        </View>
+        <Skeleton width={60} height={20} />
+      </View>
+    ))}
+  </View>
+);
 
 const PressableScale = ({
   onPress,
@@ -98,6 +118,7 @@ export default function RankingScreen() {
   const [contactsDenied, setContactsDenied] = useState(false);
   const [contactsFilterIds, setContactsFilterIds] = useState<string[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const topThree = rankingData.slice(0, 3);
   const currentUser = rankingData.find((item) => item.isUser);
   const currentUserRank = currentUser ? rankingData.findIndex((item) => item.id === currentUser.id) + 1 : null;
@@ -151,7 +172,6 @@ export default function RankingScreen() {
 
   const loadRanking = useCallback(async (forceContactsReload = false) => {
     if (!user) return;
-    setRefreshing(true);
     try {
       let filterIds: string[] | undefined = undefined;
       
@@ -176,14 +196,21 @@ export default function RankingScreen() {
       setRankingData(data);
     } finally {
       setRefreshing(false);
+      setIsLoading(false);
     }
   }, [period, scope, user, contactsFilterIds, loadContactIds]);
 
   // Load Ranking
   useEffect(() => {
     if (!user) return;
+    setIsLoading(true);
     loadRanking();
   }, [loadRanking, user]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadRanking(true);
+  }, [loadRanking]);
 
   const renderItem = useCallback(({ item, index }: { item: RankingUser; index: number }) => (
     <RankItem item={item} index={index} styles={styles} router={router} />
@@ -258,100 +285,104 @@ export default function RankingScreen() {
         </PressableScale>
       </View>
 
-      {/* Podium */}
-      {topThree.length > 0 && (
-        <View style={styles.podiumCard}>
-          <View style={styles.podiumHeader}>
-            <View style={styles.podiumTitleWrap}>
-              <Sparkles color={theme.colors.accent} size={16} />
-              <Text style={styles.podiumTitle}>Destaques</Text>
-            </View>
-            <Text style={styles.podiumSubtitle}>
-              {period === 'daily' ? 'Hoje' : period === 'weekly' ? 'Semana' : 'Mês'}
-            </Text>
-          </View>
-          <View style={styles.podiumRow}>
-            {topThree.map((item, index) => {
-              const rank = index + 1;
-              const medalColor = rank === 1 ? '#FDE047' : rank === 2 ? '#C0C0C0' : '#CD7F32';
-              return (
-                <View key={item.id} style={[styles.podiumItem, rank === 1 && styles.podiumItemChampion]}>
-                  <View style={[styles.podiumBadge, { borderColor: medalColor }]}>
-                    {rank === 1 ? <Crown color={medalColor} size={16} /> : <Text style={styles.podiumRank}>{rank}</Text>}
-                  </View>
-                  <View style={[styles.podiumAvatar, { backgroundColor: item.avatarColor }]}>
-                    {item.avatarUrl ? (
-                      <Image source={{ uri: item.avatarUrl }} style={styles.podiumAvatarImage} />
-                    ) : (
-                      <Text style={styles.podiumAvatarText}>{item.name.charAt(0)}</Text>
-                    )}
-                  </View>
-                  <Text style={styles.podiumName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.podiumTime}>{formatTimeDisplay(item.minutes)}</Text>
+      {isLoading && !refreshing ? (
+        <RankingSkeleton styles={styles} />
+      ) : (
+        <>
+          {/* Podium */}
+          {topThree.length > 0 && (
+            <View style={styles.podiumCard}>
+              <View style={styles.podiumHeader}>
+                <View style={styles.podiumTitleWrap}>
+                  <Sparkles color={theme.colors.accent} size={16} />
+                  <Text style={styles.podiumTitle}>Destaques</Text>
                 </View>
-              );
-            })}
-          </View>
-        </View>
-      )}
-
-      {currentUser && currentUserRank && (
-        <View style={styles.myRankCard}>
-          <View>
-            <Text style={styles.myRankLabel}>Sua posição</Text>
-            <Text style={styles.myRankValue}>#{currentUserRank}</Text>
-          </View>
-          <View style={styles.myRankMeta}>
-            <Text style={styles.myRankName}>{currentUser.name}</Text>
-            <Text style={styles.myRankTime}>{formatTimeDisplay(currentUser.minutes)}</Text>
-          </View>
-        </View>
-      )}
-
-      <FlatList
-        data={rankingData}
-        renderItem={renderItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-          refreshing={refreshing}
-        onRefresh={() => loadRanking(true)}
-        ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIcon}>
-                <Users2 color={theme.colors.accent} size={24} />
+                <Text style={styles.podiumSubtitle}>
+                  {period === 'daily' ? 'Hoje' : period === 'weekly' ? 'Semana' : 'Mês'}
+                </Text>
               </View>
-              <Text style={styles.emptyTitle}>
-                {scope === 'following'
-                  ? 'Sua comunidade ainda está vazia'
-                  : scope === 'contacts'
-                    ? 'Nenhum contato encontrado'
-                    : 'Sem dados no ranking'}
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                {scope === 'following'
-                  ? 'Siga pessoas para comparar desempenho e evoluir juntos.'
-                  : scope === 'contacts'
-                    ? (contactsDenied
-                      ? 'Permita o acesso aos contatos para ver seus amigos.'
-                      : 'Sincronize seus contatos para encontrar amigos no ranking.')
-                    : 'Complete ciclos para aparecer no ranking.'}
-              </Text>
-              {scope === 'following' && (
-                <PressableScale style={styles.emptyCta} onPress={() => router.push('/search' as any)}>
-                  <UserPlus color="#000" size={18} />
-                  <Text style={styles.emptyCtaText}>Encontrar pessoas</Text>
-                </PressableScale>
-              )}
-              {scope === 'contacts' && (
-                <PressableScale style={styles.emptyCta} onPress={() => router.push('/contacts-sync' as any)}>
-                  <Phone color="#000" size={18} />
-                  <Text style={styles.emptyCtaText}>Sincronizar contatos</Text>
-                </PressableScale>
-              )}
+              <View style={styles.podiumRow}>
+                {topThree.map((item, index) => {
+                  const rank = index + 1;
+                  const medalColor = rank === 1 ? '#FDE047' : rank === 2 ? '#C0C0C0' : '#CD7F32';
+                  return (
+                    <View key={item.id} style={[styles.podiumItem, rank === 1 && styles.podiumItemChampion]}>
+                      <View style={[styles.podiumBadge, { borderColor: medalColor }]}>
+                        {rank === 1 ? <Crown color={medalColor} size={16} /> : <Text style={styles.podiumRank}>{rank}</Text>}
+                      </View>
+                      <View style={[styles.podiumAvatar, { backgroundColor: item.avatarColor }]}>
+                        {item.avatarUrl ? (
+                          <Image source={{ uri: item.avatarUrl }} style={styles.podiumAvatarImage} />
+                        ) : (
+                          <Text style={styles.podiumAvatarText}>{item.name.charAt(0)}</Text>
+                        )}
+                      </View>
+                      <Text style={styles.podiumName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.podiumTime}>{formatTimeDisplay(item.minutes)}</Text>
+                    </View>
+                  );
+                })}
+              </View>
             </View>
-        }
-      />
+          )}
+
+          {currentUser && currentUserRank && (
+            <View style={styles.myRankCard}>
+              <View>
+                <Text style={styles.myRankLabel}>Sua posição</Text>
+                <Text style={styles.myRankValue}>#{currentUserRank}</Text>
+              </View>
+              <View style={styles.myRankMeta}>
+                <Text style={styles.myRankName}>{currentUser.name}</Text>
+                <Text style={styles.myRankTime}>{formatTimeDisplay(currentUser.minutes)}</Text>
+              </View>
+            </View>
+          )}
+
+          <FlatList
+            data={rankingData}
+            renderItem={renderItem}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            ListEmptyComponent={
+                <EmptyState
+                  theme={theme}
+                  icon={Users2}
+                  title={
+                    scope === 'following'
+                      ? 'Sua comunidade ainda está vazia'
+                      : scope === 'contacts'
+                        ? 'Nenhum contato encontrado'
+                        : 'Sem dados no ranking'
+                  }
+                  description={
+                    scope === 'following'
+                      ? 'Siga pessoas para comparar desempenho e evoluir juntos.'
+                      : scope === 'contacts'
+                        ? (contactsDenied
+                          ? 'Permita o acesso aos contatos para ver seus amigos.'
+                          : 'Sincronize seus contatos para encontrar amigos no ranking.')
+                        : 'Complete ciclos para aparecer no ranking.'
+                  }
+                  actionLabel={
+                    scope === 'following'
+                      ? 'Encontrar pessoas'
+                      : scope === 'contacts'
+                        ? 'Sincronizar agora'
+                        : undefined
+                  }
+                  onAction={() => {
+                    if (scope === 'following') router.push('/search' as any);
+                    else if (scope === 'contacts') router.push('/contacts-sync' as any);
+                  }}
+                />
+            }
+          />
+        </>
+      )}
     </View>
   );
 }

@@ -6,40 +6,25 @@ import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { Calendar, Clock, History as HistoryIcon, Play } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 
-const PressableScale = ({
-  onPress,
-  children,
-  style,
-}: {
-  onPress?: () => void;
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 120 }).start();
-  };
-
-  return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
-    </Pressable>
-  );
-};
-
-interface HistoryItem {
-  id: number;
-  label: string;
-  minutes: number;
-  started_at: string;
-  completed_at: string;
-}
+const HistorySkeleton = ({ styles }: { styles: any }) => (
+  <View style={styles.listContent}>
+    {[1, 2, 3, 4, 5].map((i) => (
+      <View key={i} style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Skeleton width={140} height={18} />
+          <Skeleton width={80} height={14} />
+        </View>
+        <View style={styles.cardBody}>
+          <Skeleton width={120} height={16} />
+          <Skeleton width={60} height={24} borderRadius={8} />
+        </View>
+      </View>
+    ))}
+  </View>
+);
 
 const HistoryItemComponent = React.memo(({ item, styles }: { item: HistoryItem; styles: any }) => {
   const formatDate = (dateString: string) => {
@@ -109,6 +94,7 @@ export default function HistoryScreen() {
   }, [user]);
 
   useEffect(() => {
+    setLoading(true);
     fetchHistory();
   }, [fetchHistory]);
 
@@ -133,9 +119,7 @@ export default function HistoryScreen() {
       </View>
 
       {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-            <ActivityIndicator color={theme.colors.accent} size="large" />
-        </View>
+        <HistorySkeleton styles={styles} />
       ) : (
         <FlatList
             data={history}
@@ -145,19 +129,14 @@ export default function HistoryScreen() {
             refreshing={refreshing}
             onRefresh={onRefresh}
             ListEmptyComponent={
-                <View style={styles.emptyState}>
-                  <View style={styles.emptyIcon}>
-                    <HistoryIcon color={theme.colors.accent} size={24} />
-                  </View>
-                  <Text style={styles.emptyTitle}>Seu histórico está vazio</Text>
-                  <Text style={styles.emptySubtitle}>
-                    Conclua um ciclo de foco para começar a registrar seu progresso.
-                  </Text>
-                  <PressableScale style={styles.emptyCta} onPress={() => router.push('/timer')}>
-                    <Play color="#000" size={18} />
-                    <Text style={styles.emptyCtaText}>Iniciar foco</Text>
-                  </PressableScale>
-                </View>
+                <EmptyState
+                  theme={theme}
+                  icon={HistoryIcon}
+                  title="Seu histórico está vazio"
+                  description="Conclua um ciclo de foco para começar a registrar seu progresso."
+                  actionLabel="Iniciar foco"
+                  onAction={() => router.push('/timer')}
+                />
             }
         />
       )}

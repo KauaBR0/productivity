@@ -26,8 +26,8 @@ Este documento descreve as melhorias necessárias para transformar o **Productiv
 
 ## 🎨 5. UI/UX e Polimento
 - [x] **Substituir `Alert.alert`**: Implementar uma biblioteca de Toasts (ex: `react-native-toast-message`) para notificações não intrusivas.
-- [ ] **Feedback de Erro**: Melhorar as telas de erro ("Vixi, algo deu errado") em vez de apenas logar no console.
-- [ ] **Animações de Loading**: Padronizar Skeletons ou Spinners de carregamento em todas as telas que buscam dados.
+- [x] **Feedback de Erro**: Melhoradas as telas de estado vazio e erro usando o novo componente `EmptyState`.
+- [x] **Animações de Loading**: Implementados **Skeleton Loaders** no Ranking, Histórico e Perfil para uma experiência de carregamento suave.
 
 ## 📊 6. Banco de Dados (Supabase)
 - [x] **Denormalização de Perfil**: Adicionar colunas `total_focus_minutes` e `total_cycles` na tabela `profiles` (atualizadas via trigger ou RPC) para evitar somas pesadas. (Scripts: `docs/SUPABASE_DENORMALIZE_STATS.sql` e `docs/UPDATE_RPCS_DENORMALIZED.sql`)
