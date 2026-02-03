@@ -278,7 +278,9 @@ export const useTimerLogic = () => {
 
   const playLofi = useCallback(async () => {
     if (phase !== 'focus' || !isActive || showOneMoreModal || showRewardEndModal || showRestEndModal) return;
-    if (lofiTrack === 'off' || isLofiMuted || lofiSoundRef.current) return;
+    if (lofiTrack === 'off') return;
+    if (isLofiMuted) return;
+    if (lofiSoundRef.current) return;
     try {
       const tracks = {
         lofi1: require('../assets/sounds/lofi1.mp3'),
@@ -389,6 +391,9 @@ export const useTimerLogic = () => {
 
   useEffect(() => {
     if (!isInfiniteCycle || phase !== 'focus' || !isActive) return;
+    if (!focusStartRef.current) {
+      focusStartRef.current = Date.now();
+    }
     const tick = () => {
       const elapsed = getFocusElapsedSeconds();
       setTimeLeft(elapsed);
