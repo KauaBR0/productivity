@@ -4,7 +4,7 @@ Este documento descreve as melhorias necessárias para transformar o **Productiv
 
 ## 🏗️ 1. Arquitetura e Organização de Código
 - [x] **Refatorar `app/timer.tsx`**: Extrair lógica de timer para um hook customizado `hooks/useTimerLogic.ts`.
-- [ ] **Refatorar `app/(tabs)/settings.tsx`**: Quebrar o arquivo em componentes menores na pasta `components/settings/`.
+- [x] **Refatorar `app/(tabs)/settings.tsx`**: Quebrar o arquivo em componentes menores na pasta `components/settings/`.
 - [ ] **Componentização UI**: Criar componentes de UI reutilizáveis (botões customizados, cards de ciclos) para evitar duplicação de estilos.
 - [ ] **Hooks para API**: Mover chamadas do Supabase de dentro dos componentes para serviços ou hooks (ex: `useProfile(id)`).
 
@@ -25,12 +25,12 @@ Este documento descreve as melhorias necessárias para transformar o **Productiv
 - [ ] **Build de Produção**: Configurar `eas.json` com chaves de produção reais (não usar debug keystore).
 
 ## 🎨 5. UI/UX e Polimento
-- [ ] **Substituir `Alert.alert`**: Implementar uma biblioteca de Toasts (ex: `react-native-toast-message`) para notificações não intrusivas.
+- [x] **Substituir `Alert.alert`**: Implementar uma biblioteca de Toasts (ex: `react-native-toast-message`) para notificações não intrusivas.
 - [ ] **Feedback de Erro**: Melhorar as telas de erro ("Vixi, algo deu errado") em vez de apenas logar no console.
 - [ ] **Animações de Loading**: Padronizar Skeletons ou Spinners de carregamento em todas as telas que buscam dados.
 
 ## 📊 6. Banco de Dados (Supabase)
-- [ ] **Denormalização de Perfil**: Adicionar colunas `total_focus_minutes` e `total_cycles` na tabela `profiles` (atualizadas via trigger ou RPC) para evitar somas pesadas.
+- [x] **Denormalização de Perfil**: Adicionar colunas `total_focus_minutes` e `total_cycles` na tabela `profiles` (atualizadas via trigger ou RPC) para evitar somas pesadas. (Scripts: `docs/SUPABASE_DENORMALIZE_STATS.sql` e `docs/UPDATE_RPCS_DENORMALIZED.sql`)
 - [ ] **Segurança RLS**: Revisar todas as políticas para garantir que dados sensíveis (telefones) não vazem.
 
 ---
