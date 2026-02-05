@@ -11,7 +11,7 @@ jest.mock('../lib/supabase', () => ({
 }));
 
 import { supabase } from '../lib/supabase';
-import { fetchRanking, formatTimeDisplay } from '../utils/RankingLogic';
+import { fetchRanking, formatTimeDisplay, mergeRankingWithBots } from '../utils/RankingLogic';
 
 describe('ranking helpers', () => {
   beforeEach(() => {
@@ -93,5 +93,39 @@ describe('ranking helpers', () => {
 
     consoleSpy.mockRestore();
     jest.useRealTimers();
+  });
+
+  it('injects bots to reach target count and preserves real users', () => {
+    const baseRanking = [
+      {
+        id: 'user_a',
+        name: 'Ana',
+        minutes: 120,
+        isUser: true,
+        avatarColor: '#FF4500',
+        isFocusing: false,
+      },
+      {
+        id: 'user_b',
+        name: 'Bruno',
+        minutes: 60,
+        isUser: false,
+        avatarColor: '#00FF94',
+        isFocusing: false,
+      },
+    ];
+
+    const merged = mergeRankingWithBots(baseRanking, {
+      period: 'daily',
+      currentUserId: 'user_a',
+      targetCount: 5,
+      seed: 'unit-test',
+    });
+
+    expect(merged).toHaveLength(5);
+    expect(merged.filter((item) => item.isBot)).toHaveLength(3);
+    expect(merged.find((item) => item.id === 'user_a')).toBeTruthy();
+    expect(merged.find((item) => item.id === 'user_b')).toBeTruthy();
+    expect(merged.every((item) => item.minutes >= 0)).toBe(true);
   });
 });

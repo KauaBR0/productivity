@@ -278,15 +278,39 @@ export default function PublicProfileScreen() {
         <Text style={styles.name}>{profile.username}</Text>
 
         <View style={styles.statsRow}>
-          <View style={styles.statItem}>
+          <PressableScale
+            style={styles.statItem}
+            onPress={() =>
+              router.push({
+                pathname: '/follows',
+                params: {
+                  type: 'followers',
+                  userId: profile.id,
+                  username: profile.username,
+                },
+              } as any)
+            }
+          >
             <Text style={styles.statNumber}>{formatDecimal(profile.followers_count || 0)}</Text>
             <Text style={styles.statLabel}>Seguidores</Text>
-          </View>
+          </PressableScale>
           <View style={styles.statDivider} />
-          <View style={styles.statItem}>
+          <PressableScale
+            style={styles.statItem}
+            onPress={() =>
+              router.push({
+                pathname: '/follows',
+                params: {
+                  type: 'following',
+                  userId: profile.id,
+                  username: profile.username,
+                },
+              } as any)
+            }
+          >
             <Text style={styles.statNumber}>{formatDecimal(profile.following_count || 0)}</Text>
             <Text style={styles.statLabel}>Seguindo</Text>
-          </View>
+          </PressableScale>
         </View>
 
         <View style={styles.detailsGrid}>

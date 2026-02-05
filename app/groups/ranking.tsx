@@ -79,10 +79,20 @@ export default function GroupRankingScreen() {
     if (index === 1) { medalColor = '#C0C0C0'; medalIcon = '🥈'; }
     if (index === 2) { medalColor = '#CD7F32'; medalIcon = '🥉'; }
 
+    const handlePress = () => {
+      if (item.isBot) return;
+      if (item.isUser) {
+        router.push('/profile');
+        return;
+      }
+      router.push(`/user/${item.id}` as any);
+    };
+
     return (
       <PressableScale
         style={[styles.rankItem, item.isUser && styles.userHighlight]}
-        onPress={() => item.isUser ? router.push('/profile') : router.push(`/user/${item.id}` as any)}
+        onPress={handlePress}
+        disabled={item.isBot}
       >
         <View style={styles.rankLeft}>
           <View style={styles.positionContainer}>

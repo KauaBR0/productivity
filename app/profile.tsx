@@ -340,9 +340,32 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.userName}>{user.name}</Text>
           <Text style={styles.emailText}>{user.email}</Text>
-          <View style={styles.followersTag}>
-              <Users color="#666" size={14} />
-              <Text style={styles.followersText}>{formatDecimal(profile?.followers_count || 0)} Seguidores</Text>
+          <View style={styles.followStatsRow}>
+            <PressableScale
+              style={styles.followStatItem}
+              onPress={() =>
+                router.push({
+                  pathname: '/follows',
+                  params: { type: 'followers', userId: user.id, username: user.name },
+                } as any)
+              }
+            >
+              <Text style={styles.followStatNumber}>{formatDecimal(profile?.followers_count || 0)}</Text>
+              <Text style={styles.followStatLabel}>Seguidores</Text>
+            </PressableScale>
+            <View style={styles.followStatDivider} />
+            <PressableScale
+              style={styles.followStatItem}
+              onPress={() =>
+                router.push({
+                  pathname: '/follows',
+                  params: { type: 'following', userId: user.id, username: user.name },
+                } as any)
+              }
+            >
+              <Text style={styles.followStatNumber}>{formatDecimal(profile?.following_count || 0)}</Text>
+              <Text style={styles.followStatLabel}>Seguindo</Text>
+            </PressableScale>
           </View>
           <PressableScale style={styles.friendsLink} onPress={() => router.push('/friends' as any)}>
             <View style={styles.friendsLinkInfo}>
@@ -734,22 +757,36 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     color: theme.colors.textMuted,
     fontSize: 14,
   },
-  followersTag: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      marginTop: 12,
-      backgroundColor: theme.colors.surface,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+  followStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    gap: 14,
   },
-  followersText: {
-      color: '#A1A1AA',
-      fontSize: 12,
-      fontWeight: '600',
+  followStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  followStatNumber: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  followStatLabel: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  followStatDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: theme.colors.border,
   },
   friendsLink: {
     marginTop: 12,

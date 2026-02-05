@@ -41,10 +41,20 @@ const RankItem = React.memo(({ item, index, styles, router }: { item: RankingUse
   if (index === 1) { medalColor = '#C0C0C0'; medalIcon = '🥈'; } // Silver
   if (index === 2) { medalColor = '#CD7F32'; medalIcon = '🥉'; } // Bronze
 
+  const handlePress = () => {
+    if (item.isBot) return;
+    if (item.isUser) {
+      router.push('/profile');
+      return;
+    }
+    router.push(`/user/${item.id}` as any);
+  };
+
   return (
     <PressableScale 
       style={[styles.rankItem, item.isUser && styles.userHighlight]}
-      onPress={() => item.isUser ? router.push('/profile') : router.push(`/user/${item.id}` as any)}
+      onPress={handlePress}
+      disabled={item.isBot}
     >
       <View style={styles.rankLeft}>
         <View style={[styles.positionContainer]}>

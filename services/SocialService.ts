@@ -169,6 +169,64 @@ export const SocialService = {
     });
   },
 
+  async getFollowers(targetUserId: string, page = 0, limit = 0): Promise<SocialProfile[]> {
+    const { data: followers, error: followersError } = await supabase
+      .from('follows')
+      .select('follower_id')
+      .eq('following_id', targetUserId);
+
+    if (followersError) throw followersError;
+
+    const allFollowerIds = (followers || []).map(row => row.follower_id);
+    if (allFollowerIds.length === 0) return [];
+
+    const paginatedIds =
+      limit > 0 ? allFollowerIds.slice(page * limit, (page + 1) * limit) : allFollowerIds;
+    if (paginatedIds.length === 0) return [];
+
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_url, is_focusing, current_streak, last_focus_date, phone')
+      .in('id', paginatedIds);
+
+    if (profilesError) throw profilesError;
+
+    return (profiles || []).sort((a, b) => {
+      const focusing = Number(!!b.is_focusing) - Number(!!a.is_focusing);
+      if (focusing !== 0) return focusing;
+      return a.username.localeCompare(b.username);
+    });
+  },
+
+  async getFollowing(targetUserId: string, page = 0, limit = 0): Promise<SocialProfile[]> {
+    const { data: following, error: followingError } = await supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', targetUserId);
+
+    if (followingError) throw followingError;
+
+    const allFollowingIds = (following || []).map(row => row.following_id);
+    if (allFollowingIds.length === 0) return [];
+
+    const paginatedIds =
+      limit > 0 ? allFollowingIds.slice(page * limit, (page + 1) * limit) : allFollowingIds;
+    if (paginatedIds.length === 0) return [];
+
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_url, is_focusing, current_streak, last_focus_date, phone')
+      .in('id', paginatedIds);
+
+    if (profilesError) throw profilesError;
+
+    return (profiles || []).sort((a, b) => {
+      const focusing = Number(!!b.is_focusing) - Number(!!a.is_focusing);
+      if (focusing !== 0) return focusing;
+      return a.username.localeCompare(b.username);
+    });
+  },
+
   async matchContactsByPhones(currentUserId: string, phones: string[]): Promise<SocialProfile[]> {
     if (!phones.length) return [];
     const chunkSize = 500;
