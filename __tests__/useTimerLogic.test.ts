@@ -55,6 +55,10 @@ jest.mock('@/services/ForegroundTimerService', () => ({
   updateForegroundTimer: jest.fn(),
 }));
 jest.mock('@/services/AppBlockerService', () => ({
+  getInstalledApps: jest.fn().mockResolvedValue([]),
+  getPackagesForCategory: jest.fn().mockReturnValue([]),
+  resolveBlockCategoryFromReward: jest.fn().mockReturnValue(null),
+  setBlocklist: jest.fn(),
   setSessionActive: jest.fn(),
 }));
 
@@ -74,6 +78,7 @@ describe('useTimerLogic', () => {
       alarmSound: 'alarm',
       lofiTrack: 'off',
       rouletteExtraSpins: 0,
+      blockedApps: [],
       theme: { colors: {}, radius: {}, shadow: {} },
     });
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);

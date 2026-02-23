@@ -10,8 +10,15 @@ import { CycleDef } from '@/constants/FocusConfig';
 import { useSettings } from '@/context/SettingsContext';
 import { useGamification } from '@/context/GamificationContext';
 import { startForegroundTimer, stopForegroundTimer, updateForegroundTimer } from '@/services/ForegroundTimerService';
-import { setSessionActive } from '@/services/AppBlockerService';
-import { ACTIVE_TIMER_STORAGE_KEY, StoredTimerState, TimerPhase } from '@/types/timer';
+import {
+  getInstalledApps,
+  getPackagesForCategory,
+  InstalledApp,
+  resolveBlockCategoryFromReward,
+  setBlocklist,
+  setSessionActive,
+} from '@/services/AppBlockerService';
+import { ACTIVE_TIMER_STORAGE_KEY, StoredTimerState } from '@/types/timer';
 import { useTimerStore } from '@/store/useTimerStore';
 import Toast from 'react-native-toast-message';
 import { ActionDialogOpener, ActionDialogOptions } from '@/hooks/useActionDialog';
@@ -20,7 +27,7 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
   useKeepAwake();
   const router = useRouter();
   const { cycleId } = useLocalSearchParams();
-  const { cycles, rewards, alarmSound, lofiTrack, rouletteExtraSpins } = useSettings();
+  const { cycles, rewards, alarmSound, lofiTrack, rouletteExtraSpins, blockedApps } = useSettings();
   const { processCycleCompletion, setIsFocusing } = useGamification();
 
   // Global State from Zustand
@@ -56,6 +63,54 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
   const shouldKeepFocusRef = useRef(false);
   const skipInitRef = useRef(false);
   const openActionDialog = options?.openActionDialog;
+  const [installedApps, setInstalledApps] = useState<InstalledApp[]>([]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    let mounted = true;
+
+    const loadInstalledApps = async () => {
+      try {
+        const apps = await getInstalledApps();
+        if (!mounted) return;
+        setInstalledApps(apps);
+      } catch {
+        if (!mounted) return;
+        setInstalledApps([]);
+      }
+    };
+
+    void loadInstalledApps();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const availableCategories = useMemo(
+    () => Array.from(new Set(installedApps.map((app) => app.category || 'Outros'))),
+    [installedApps]
+  );
+
+  const rewardCategoryToBlock = useMemo(() => {
+    if (phase !== 'reward' || !selectedReward) return null;
+    return resolveBlockCategoryFromReward(selectedReward, availableCategories);
+  }, [phase, selectedReward, availableCategories]);
+
+  const rewardCategoryPackages = useMemo(
+    () => getPackagesForCategory(installedApps, rewardCategoryToBlock),
+    [installedApps, rewardCategoryToBlock]
+  );
+
+  const shouldBlockRewardCategory =
+    phase === 'reward' &&
+    isActive &&
+    rewardCategoryPackages.length > 0;
+
+  const effectiveBlocklist = useMemo(() => {
+    const source = shouldBlockRewardCategory ? rewardCategoryPackages : blockedApps;
+    return Array.from(new Set(source.filter(Boolean))).sort();
+  }, [shouldBlockRewardCategory, rewardCategoryPackages, blockedApps]);
 
   // UI State (Modals)
   const [showOneMoreModal, setShowOneMoreModal] = useState(false);
@@ -66,6 +121,7 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
   const [isLofiMuted, setIsLofiMuted] = useState(false);
   const lastForegroundUpdateRef = useRef(0);
   const lastBlockerActiveRef = useRef<boolean | null>(null);
+  const lastAppliedBlocklistRef = useRef<string | null>(null);
 
   // Initialize / Restore
   useEffect(() => {
@@ -232,19 +288,33 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
-    const nextActive =
-      phase === 'focus' && isActive && !showOneMoreModal && !showRewardEndModal && !showRestEndModal;
+    const shouldEnableBlockerSession =
+      (phase === 'focus' && isActive && !showOneMoreModal && !showRewardEndModal && !showRestEndModal) ||
+      shouldBlockRewardCategory;
+
+    const nextActive = shouldEnableBlockerSession;
     if (lastBlockerActiveRef.current === nextActive) return;
     lastBlockerActiveRef.current = nextActive;
     void setSessionActive(nextActive);
-  }, [phase, isActive, showOneMoreModal, showRewardEndModal, showRestEndModal]);
+  }, [phase, isActive, showOneMoreModal, showRewardEndModal, showRestEndModal, shouldBlockRewardCategory]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const nextKey = effectiveBlocklist.join('|');
+    if (lastAppliedBlocklistRef.current === nextKey) return;
+    lastAppliedBlocklistRef.current = nextKey;
+    void setBlocklist(effectiveBlocklist);
+  }, [effectiveBlocklist]);
 
   useEffect(() => {
     return () => {
       if (Platform.OS !== 'android') return;
+      lastAppliedBlocklistRef.current = null;
+      const fallbackBlocklist = Array.from(new Set(blockedApps.filter(Boolean))).sort();
+      void setBlocklist(fallbackBlocklist);
       void setSessionActive(false);
     };
-  }, []);
+  }, [blockedApps]);
 
   useEffect(() => {
     if (phase !== 'focus' && isDeepFocus) {
