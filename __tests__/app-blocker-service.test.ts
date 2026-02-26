@@ -1,4 +1,5 @@
 import {
+  getPackagesExcludingCategory,
   getPackagesForCategory,
   resolveBlockCategoryFromReward,
   type InstalledApp,
@@ -30,6 +31,19 @@ describe('AppBlockerService reward category helpers', () => {
     expect(getPackagesForCategory(installedApps, 'jogos')).toEqual([
       'pkg.game.one',
       'pkg.game.two',
+    ]);
+  });
+
+  it('gets package names excluding the allowed reward category', () => {
+    const installedApps: InstalledApp[] = [
+      { packageName: 'pkg.social.one', label: 'Social One', category: 'Redes Sociais' },
+      { packageName: 'pkg.video.one', label: 'Video One', category: 'Vídeo' },
+      { packageName: 'pkg.game.one', label: 'Game One', category: 'Jogos' },
+    ];
+
+    expect(getPackagesExcludingCategory(installedApps, 'Redes Sociais')).toEqual([
+      'pkg.video.one',
+      'pkg.game.one',
     ]);
   });
 });

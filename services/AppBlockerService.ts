@@ -97,6 +97,20 @@ export const getPackagesForCategory = (
     .filter(Boolean);
 };
 
+export const getPackagesExcludingCategory = (
+  installedApps: InstalledApp[],
+  allowedCategory: string | null | undefined
+): string[] => {
+  if (!allowedCategory) return [];
+  const allowedCategoryKey = normalizeCategoryKey(allowedCategory);
+  if (!allowedCategoryKey) return [];
+
+  return installedApps
+    .filter((app) => normalizeCategoryKey(app.category || 'Outros') !== allowedCategoryKey)
+    .map((app) => app.packageName)
+    .filter(Boolean);
+};
+
 const BlockerModule = NativeModules?.AppBlocker;
 const isAndroid = Platform.OS === 'android';
 

@@ -56,7 +56,7 @@ jest.mock('@/services/ForegroundTimerService', () => ({
 }));
 jest.mock('@/services/AppBlockerService', () => ({
   getInstalledApps: jest.fn().mockResolvedValue([]),
-  getPackagesForCategory: jest.fn().mockReturnValue([]),
+  getPackagesExcludingCategory: jest.fn().mockReturnValue([]),
   resolveBlockCategoryFromReward: jest.fn().mockReturnValue(null),
   setBlocklist: jest.fn(),
   setSessionActive: jest.fn(),

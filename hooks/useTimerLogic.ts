@@ -11,8 +11,8 @@ import { useSettings } from '@/context/SettingsContext';
 import { useGamification } from '@/context/GamificationContext';
 import { startForegroundTimer, stopForegroundTimer, updateForegroundTimer } from '@/services/ForegroundTimerService';
 import {
+  getPackagesExcludingCategory,
   getInstalledApps,
-  getPackagesForCategory,
   InstalledApp,
   resolveBlockCategoryFromReward,
   setBlocklist,
@@ -97,20 +97,20 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
     return resolveBlockCategoryFromReward(selectedReward, availableCategories);
   }, [phase, selectedReward, availableCategories]);
 
-  const rewardCategoryPackages = useMemo(
-    () => getPackagesForCategory(installedApps, rewardCategoryToBlock),
+  const rewardOverridePackages = useMemo(
+    () => getPackagesExcludingCategory(installedApps, rewardCategoryToBlock),
     [installedApps, rewardCategoryToBlock]
   );
 
-  const shouldBlockRewardCategory =
+  const shouldApplyRewardSectionOverride =
     phase === 'reward' &&
     isActive &&
-    rewardCategoryPackages.length > 0;
+    rewardOverridePackages.length > 0;
 
   const effectiveBlocklist = useMemo(() => {
-    const source = shouldBlockRewardCategory ? rewardCategoryPackages : blockedApps;
+    const source = shouldApplyRewardSectionOverride ? rewardOverridePackages : blockedApps;
     return Array.from(new Set(source.filter(Boolean))).sort();
-  }, [shouldBlockRewardCategory, rewardCategoryPackages, blockedApps]);
+  }, [shouldApplyRewardSectionOverride, rewardOverridePackages, blockedApps]);
 
   // UI State (Modals)
   const [showOneMoreModal, setShowOneMoreModal] = useState(false);
@@ -290,13 +290,13 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
     if (Platform.OS !== 'android') return;
     const shouldEnableBlockerSession =
       (phase === 'focus' && isActive && !showOneMoreModal && !showRewardEndModal && !showRestEndModal) ||
-      shouldBlockRewardCategory;
+      shouldApplyRewardSectionOverride;
 
     const nextActive = shouldEnableBlockerSession;
     if (lastBlockerActiveRef.current === nextActive) return;
     lastBlockerActiveRef.current = nextActive;
     void setSessionActive(nextActive);
-  }, [phase, isActive, showOneMoreModal, showRewardEndModal, showRestEndModal, shouldBlockRewardCategory]);
+  }, [phase, isActive, showOneMoreModal, showRewardEndModal, showRestEndModal, shouldApplyRewardSectionOverride]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
