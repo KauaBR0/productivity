@@ -1,15 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { StyleSheet, Text, View, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
-import { Lock, Mail, User as UserIcon, ArrowLeft, Phone } from 'lucide-react-native';
+import { Lock, Mail, User as UserIcon, ArrowLeft, Phone, Gift } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
 import Toast from 'react-native-toast-message';
 import { PressableScale } from '@/components/PressableScale';
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ ref?: string | string[] }>();
   const { signUp } = useAuth();
   const { theme } = useSettings();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -17,8 +18,15 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const refParam = Array.isArray(params.ref) ? params.ref[0] : params.ref;
+    if (!refParam) return;
+    setReferralCode(refParam.trim().toUpperCase());
+  }, [params.ref]);
 
   const handleRegister = async () => {
     if (!name || !email || !password || !phone) {
@@ -32,12 +40,23 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      await signUp(name, email, password, phone);
+      const result = await signUp(name, email, password, phone, referralCode);
       Toast.show({
         type: 'success',
         text1: 'Conta criada',
-        text2: 'Bem-vindo ao Productivy!',
+        text2: result.referralApplied
+          ? 'Bem-vindo! Seu codigo de indicacao foi aplicado.'
+          : 'Bem-vindo ao Productivy!',
       });
+
+      if (result.referralError) {
+        Toast.show({
+          type: 'info',
+          text1: 'Codigo de indicacao',
+          text2: result.referralError,
+        });
+      }
+
       router.replace('/');
     } catch (error: any) {
       Toast.show({
@@ -107,6 +126,19 @@ export default function RegisterScreen() {
               keyboardType="phone-pad"
               value={phone}
               onChangeText={(text) => setPhone(text.replace(/[^0-9+() -]/g, ''))}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Gift color="#A1A1AA" size={20} style={styles.icon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Codigo de indicacao (opcional)"
+              placeholderTextColor="#666"
+              autoCapitalize="characters"
+              value={referralCode}
+              onChangeText={(text) => setReferralCode(text.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
+              maxLength={12}
             />
           </View>
 

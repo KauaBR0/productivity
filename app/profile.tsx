@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, TextInput, Image, ScrollView, Platform, Pressable, Modal } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, TextInput, Image, ScrollView, Platform, Pressable, Modal, Share } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown, FadeIn, ZoomIn, useAnimatedStyle, useSharedValue, withRepeat, withTiming, withSequence, Easing, interpolate, Extrapolate } from 'react-native-reanimated';
+import * as Linking from 'expo-linking';
 import { useAuth } from '@/context/AuthContext';
 import { useGamification } from '@/context/GamificationContext';
 import { useSettings } from '@/context/SettingsContext';
 import { ACHIEVEMENTS, Achievement } from '@/constants/GamificationConfig';
 import { SocialService } from '@/services/SocialService';
+import { ReferralService, ReferralSummary } from '@/services/ReferralService';
 import { X, Camera, LogOut, Save, Trophy, Lock, Flame, Clock, CheckCircle, ChevronRight, Users, Footprints, Target, Medal, Star, Crown, Zap, Rocket, Shield, Gem } from 'lucide-react-native';
 import { Theme } from '@/constants/theme';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -193,6 +195,9 @@ export default function ProfileScreen() {
   const [friendsCount, setFriendsCount] = useState(0);
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [showAchievementModal, setShowAchievementModal] = useState(false);
+  const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
+  const [referralLoading, setReferralLoading] = useState(true);
+  const [sharingReferral, setSharingReferral] = useState(false);
 
   const weeklyStats = useMemo(() => {
     const today = new Date();
@@ -251,6 +256,36 @@ export default function ProfileScreen() {
       }
   }, [user]);
 
+  useEffect(() => {
+    let active = true;
+
+    if (!user) {
+      setReferralSummary(null);
+      setReferralLoading(false);
+      return;
+    }
+
+    setReferralLoading(true);
+    ReferralService.getMyReferralSummary()
+      .then((summary) => {
+        if (!active) return;
+        setReferralSummary(summary);
+      })
+      .catch((error) => {
+        console.error('Failed to load referral summary:', error);
+        if (!active) return;
+        setReferralSummary(null);
+      })
+      .finally(() => {
+        if (!active) return;
+        setReferralLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
   const handleClose = () => {
     router.back();
   };
@@ -294,6 +329,34 @@ export default function ProfileScreen() {
         text1: 'Erro',
         text2: 'Falha ao atualizar perfil.',
       });
+    }
+  };
+
+  const handleShareReferral = async () => {
+    if (!referralSummary?.referralCode) return;
+
+    setSharingReferral(true);
+    try {
+      const deepLink = Linking.createURL('/register', {
+        queryParams: { ref: referralSummary.referralCode },
+      });
+      const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.kauaan.productivy';
+      const message =
+        `Estou usando o Productivy para focar melhor.\n` +
+        `Use meu codigo ${referralSummary.referralCode} no cadastro e ganhe moedas ao concluir seu primeiro ciclo.\n\n` +
+        `Abrir app: ${deepLink}\n` +
+        `Play Store: ${playStoreUrl}`;
+
+      await Share.share({ message });
+    } catch (error) {
+      console.error('Failed to share referral code:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Nao foi possivel compartilhar agora.',
+      });
+    } finally {
+      setSharingReferral(false);
     }
   };
 
@@ -379,6 +442,45 @@ export default function ProfileScreen() {
             </View>
             <ChevronRight color={theme.colors.textMuted} size={18} />
           </PressableScale>
+
+          <Animated.View entering={FadeInDown.delay(180).duration(600)} style={styles.referralCard}>
+            <View style={styles.referralHeader}>
+              <Text style={styles.referralTitle}>Moedas</Text>
+              <Text style={styles.referralBalance}>
+                {referralLoading ? '...' : `${formatDecimal(referralSummary?.coinsBalance || 0)} moedas`}
+              </Text>
+            </View>
+            <Text style={styles.referralHint}>
+              Convide amigos. Quando eles concluirem o primeiro ciclo, ambos recebem moedas.
+            </Text>
+
+            <View style={styles.referralCodeRow}>
+              <Text style={styles.referralCodeLabel}>Seu codigo</Text>
+              <Text style={styles.referralCodeValue}>{referralSummary?.referralCode || '--------'}</Text>
+            </View>
+
+            <Text style={styles.referralMeta}>
+              {`${formatDecimal(referralSummary?.qualifiedReferrals || 0)} qualificadas • ${formatDecimal(referralSummary?.pendingReferrals || 0)} pendentes`}
+            </Text>
+
+            <View style={styles.referralActionsRow}>
+              <PressableScale
+                style={[styles.referralShareButton, (!referralSummary?.referralCode || sharingReferral) && styles.referralShareButtonDisabled]}
+                onPress={handleShareReferral}
+                disabled={!referralSummary?.referralCode || sharingReferral}
+              >
+                <Text style={styles.referralShareButtonText}>
+                  {sharingReferral ? 'Compartilhando...' : 'Convidar amigos'}
+                </Text>
+              </PressableScale>
+              <PressableScale
+                style={styles.referralStatementButton}
+                onPress={() => router.push('/coins-history' as any)}
+              >
+                <Text style={styles.referralStatementButtonText}>Ver extrato</Text>
+              </PressableScale>
+            </View>
+          </Animated.View>
         </Animated.View>
 
         {/* Level Progress */}
@@ -825,6 +927,96 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     color: theme.colors.textMuted,
     fontSize: 12,
     marginTop: 2,
+  },
+  referralCard: {
+    marginTop: 12,
+    width: '90%',
+    backgroundColor: theme.colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    padding: 14,
+    gap: 10,
+  },
+  referralHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  referralTitle: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  referralBalance: {
+    color: theme.colors.accent,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  referralHint: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  referralCodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.colors.surfaceSoft,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  referralCodeLabel: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+  },
+  referralCodeValue: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+  },
+  referralMeta: {
+    color: theme.colors.textMuted,
+    fontSize: 11,
+  },
+  referralActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  referralShareButton: {
+    flex: 1,
+    backgroundColor: theme.colors.accent,
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  referralShareButtonDisabled: {
+    opacity: 0.6,
+  },
+  referralShareButtonText: {
+    color: theme.colors.accentDark,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  referralStatementButton: {
+    backgroundColor: theme.colors.surfaceSoft,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  referralStatementButtonText: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
   },
   // Progress
   progressSection: {

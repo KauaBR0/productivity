@@ -5,6 +5,7 @@ import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { normalizePhone } from '@/utils/phone';
+import { ReferralService } from '@/services/ReferralService';
 
 // Ensure the browser can return to the app
 WebBrowser.maybeCompleteAuthSession();
@@ -24,13 +25,38 @@ interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (name: string, email: string, password: string, phone: string) => Promise<void>;
+  signUp: (
+    name: string,
+    email: string,
+    password: string,
+    phone: string,
+    referralCode?: string
+  ) => Promise<{ referralApplied: boolean; referralError: string | null }>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const getReferralErrorMessage = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || '');
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('own referral code')) {
+    return 'Nao e possivel usar seu proprio codigo.';
+  }
+
+  if (normalized.includes('already claimed')) {
+    return 'Este codigo ja foi usado nesta conta.';
+  }
+
+  if (normalized.includes('not found') || normalized.includes('invalid')) {
+    return 'Codigo de indicacao invalido.';
+  }
+
+  return 'Nao foi possivel aplicar o codigo de indicacao agora.';
+};
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -97,7 +123,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) throw error;
   };
 
-  const signUp = async (name: string, email: string, password: string, phone: string) => {
+  const signUp = async (
+    name: string,
+    email: string,
+    password: string,
+    phone: string,
+    referralCode?: string
+  ) => {
     const normalizedPhone = normalizePhone(phone);
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -111,13 +143,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) throw error;
 
     const userId = data.user?.id;
+    let referralApplied = false;
+    let referralError: string | null = null;
+
     if (userId) {
-      await supabase.from('profiles').upsert({
+      const { error: profileError } = await supabase.from('profiles').upsert({
         id: userId,
         username: name,
         phone: normalizedPhone,
       });
+
+      if (profileError) throw profileError;
+
+      const cleanCode = referralCode?.trim();
+      if (cleanCode) {
+        try {
+          await ReferralService.claimReferralCode(cleanCode);
+          referralApplied = true;
+        } catch (claimError) {
+          referralError = getReferralErrorMessage(claimError);
+          console.warn('Failed to claim referral code:', claimError);
+        }
+      }
     }
+
+    return { referralApplied, referralError };
   };
 
   const signInWithGoogle = async () => {
