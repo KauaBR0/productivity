@@ -65,6 +65,7 @@ export default function RootLayout() {
             <OfflineNotice />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="auth/callback" options={{ animation: 'fade' }} />
               <Stack.Screen name="timer" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="login" options={{ animation: 'fade' }} />
               <Stack.Screen name="register" options={{ animation: 'slide_from_right' }} />

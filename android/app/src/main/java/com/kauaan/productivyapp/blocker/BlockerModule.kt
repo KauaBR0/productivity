@@ -1,6 +1,9 @@
-package com.kauaan.productivy.blocker
+package com.kauaan.productivyapp.blocker
 
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import java.util.Locale
 import com.facebook.react.bridge.Arguments
@@ -55,6 +58,44 @@ class BlockerModule(private val reactContext: ReactApplicationContext) :
     map.putString("lastAttemptPackage", BlockerPrefs.getLastAttemptPackage(reactContext))
     map.putDouble("lastAttemptTime", BlockerPrefs.getLastAttemptTime(reactContext).toDouble())
     promise.resolve(map)
+  }
+
+  @ReactMethod
+  fun getDiagnostics(promise: Promise) {
+    try {
+      val powerManager = reactContext.getSystemService(PowerManager::class.java)
+      val ignoringBatteryOptimizations =
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && powerManager != null) {
+            powerManager.isIgnoringBatteryOptimizations(reactContext.packageName)
+          } else {
+            true
+          }
+
+      val map = Arguments.createMap().apply {
+        putBoolean("accessibilityEnabled", isAccessibilityServiceEnabled())
+        putBoolean("sessionActive", BlockerPrefs.isSessionActive(reactContext))
+        putInt("blocklistSize", BlockerPrefs.getBlocklist(reactContext).size)
+        putString("manufacturer", Build.MANUFACTURER ?: "")
+        putString("brand", Build.BRAND ?: "")
+        putString("model", Build.MODEL ?: "")
+        putBoolean("ignoringBatteryOptimizations", ignoringBatteryOptimizations)
+        putDouble("serviceConnectedAt", BlockerPrefs.getServiceConnectedAt(reactContext).toDouble())
+        putString("lastEventPackage", BlockerPrefs.getLastEventPackage(reactContext))
+        putDouble("lastEventTime", BlockerPrefs.getLastEventTime(reactContext).toDouble())
+        putString("lastAttemptPackage", BlockerPrefs.getLastAttemptPackage(reactContext))
+        putDouble("lastAttemptTime", BlockerPrefs.getLastAttemptTime(reactContext).toDouble())
+        putInt("attemptCountToday", BlockerPrefs.getAttemptCount(reactContext))
+        putDouble(
+            "lastBlockScreenLaunchAt",
+            BlockerPrefs.getLastBlockScreenLaunchAt(reactContext).toDouble()
+        )
+        putString("lastBlockScreenError", BlockerPrefs.getLastBlockScreenError(reactContext))
+      }
+
+      promise.resolve(map)
+    } catch (error: Exception) {
+      promise.reject("ERR_BLOCKER_DIAGNOSTICS", error)
+    }
   }
 
   @ReactMethod
@@ -155,6 +196,37 @@ class BlockerModule(private val reactContext: ReactApplicationContext) :
     }
   }
 
+  @ReactMethod
+  fun openBatteryOptimizationSettings() {
+    try {
+      val intent =
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+          } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+              data = Uri.parse("package:" + reactContext.packageName)
+            }
+          }
+      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      reactContext.startActivity(intent)
+    } catch (e: Exception) {
+      val fallbackIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = Uri.parse("package:" + reactContext.packageName)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      reactContext.startActivity(fallbackIntent)
+    }
+  }
+
+  @ReactMethod
+  fun openAppDetailsSettings() {
+    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+      data = Uri.parse("package:" + reactContext.packageName)
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    reactContext.startActivity(intent)
+  }
+
   private fun isServiceEnabled(context: ReactApplicationContext, serviceId: String): Boolean {
     val enabledServices =
         Settings.Secure.getString(
@@ -163,5 +235,12 @@ class BlockerModule(private val reactContext: ReactApplicationContext) :
         )
             ?: return false
     return enabledServices.contains(serviceId, ignoreCase = true)
+  }
+
+  private fun isAccessibilityServiceEnabled(): Boolean {
+    return isServiceEnabled(
+        reactContext,
+        reactContext.packageName + "/" + BlockerAccessibilityService::class.java.name
+    )
   }
 }

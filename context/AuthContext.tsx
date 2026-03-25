@@ -6,6 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { normalizePhone } from '@/utils/phone';
 import { ReferralService } from '@/services/ReferralService';
+import { getUserDisplayName, parseAuthCallbackUrl } from '@/utils/auth';
 
 // Ensure the browser can return to the app
 WebBrowser.maybeCompleteAuthSession();
@@ -71,6 +72,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(session);
       if (session?.user) {
         setUser(mapSupabaseUser(session.user));
+        void ensureProfileRow(session.user);
       } else {
         setUser(null);
       }
@@ -82,6 +84,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(session);
       if (session?.user) {
         setUser(mapSupabaseUser(session.user));
+        void ensureProfileRow(session.user);
       } else {
         setUser(null);
       }
@@ -95,10 +98,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return {
           id: u.id,
           email: u.email || '',
-          name: u.user_metadata?.full_name || 'Usuário',
+          name: getUserDisplayName(u),
           avatar: u.user_metadata?.avatar_url,
           bio: u.user_metadata?.bio,
       };
+  };
+
+  const ensureProfileRow = async (authUser: SupabaseUser, phone?: string | null) => {
+    const username = getUserDisplayName(authUser);
+    const profilePayload: Record<string, string | null> = {
+      id: authUser.id,
+      username,
+      avatar_url: authUser.user_metadata?.avatar_url || null,
+    };
+
+    const normalizedPhone = normalizePhone(phone || authUser.phone || '');
+    if (normalizedPhone) {
+      profilePayload.phone = normalizedPhone;
+    }
+
+    const { error } = await supabase.from('profiles').upsert(profilePayload);
+    if (error) throw error;
   };
 
   // Protected Route Logic
@@ -106,7 +126,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (isLoading) return;
 
     const currentPath = segments.join('/');
-    const isPublicRoute = currentPath === 'login' || currentPath === 'register';
+    const isPublicRoute =
+      currentPath === 'login' ||
+      currentPath === 'register' ||
+      currentPath === 'auth/callback';
 
     if (!user && !isPublicRoute) {
       router.replace('/login');
@@ -146,14 +169,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let referralApplied = false;
     let referralError: string | null = null;
 
-    if (userId) {
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        id: userId,
-        username: name,
-        phone: normalizedPhone,
-      });
-
-      if (profileError) throw profileError;
+    if (data.user && userId) {
+      await ensureProfileRow(
+        {
+          ...data.user,
+          user_metadata: {
+            ...data.user.user_metadata,
+            full_name: name,
+          },
+        },
+        normalizedPhone
+      );
 
       const cleanCode = referralCode?.trim();
       if (cleanCode) {
@@ -172,7 +198,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signInWithGoogle = async () => {
     try {
-        const redirectUrl = Linking.createURL('/(auth)/callback');
+        const redirectUrl = Linking.createURL('/auth/callback');
         const { data, error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
@@ -186,17 +212,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
 
         if (res.type === 'success') {
-            const { url } = res;
-            const params = Linking.parse(url);
-            const access_token = params.queryParams?.access_token as string;
-            const refresh_token = params.queryParams?.refresh_token as string;
+            const params = parseAuthCallbackUrl(res.url);
 
-            if (access_token && refresh_token) {
-                await supabase.auth.setSession({
-                    access_token,
-                    refresh_token,
-                });
+            if (params.error) {
+                throw new Error(params.error);
             }
+
+            if (params.accessToken && params.refreshToken) {
+                await supabase.auth.setSession({
+                    access_token: params.accessToken,
+                    refresh_token: params.refreshToken,
+                });
+                return;
+            }
+
+            if (params.code) {
+                await supabase.auth.exchangeCodeForSession(params.code);
+                return;
+            }
+
+            throw new Error('Nao foi possivel concluir o login com Google.');
+        }
+
+        if (res.type !== 'cancel') {
+            throw new Error('O login com Google foi interrompido.');
         }
     } catch (error) {
         console.error('Google Sign In Error:', error);

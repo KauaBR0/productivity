@@ -7,6 +7,24 @@ type AttemptStats = {
   lastAttemptTime: number;
 };
 
+export type BlockerDiagnostics = {
+  accessibilityEnabled: boolean;
+  sessionActive: boolean;
+  blocklistSize: number;
+  manufacturer: string;
+  brand: string;
+  model: string;
+  ignoringBatteryOptimizations: boolean;
+  serviceConnectedAt: number;
+  lastEventPackage: string | null;
+  lastEventTime: number;
+  lastAttemptPackage: string | null;
+  lastAttemptTime: number;
+  attemptCountToday: number;
+  lastBlockScreenLaunchAt: number;
+  lastBlockScreenError: string | null;
+};
+
 export type InstalledApp = {
   packageName: string;
   label: string;
@@ -144,6 +162,40 @@ export const checkOverlayPermission = async (): Promise<boolean> => {
 export const requestOverlayPermission = async () => {
   if (!isAndroid || !BlockerModule?.requestOverlayPermission) return;
   BlockerModule.requestOverlayPermission();
+};
+
+export const getBlockerDiagnostics = async (): Promise<BlockerDiagnostics> => {
+  if (!isAndroid || !BlockerModule?.getDiagnostics) {
+    return {
+      accessibilityEnabled: false,
+      sessionActive: false,
+      blocklistSize: 0,
+      manufacturer: '',
+      brand: '',
+      model: '',
+      ignoringBatteryOptimizations: true,
+      serviceConnectedAt: 0,
+      lastEventPackage: null,
+      lastEventTime: 0,
+      lastAttemptPackage: null,
+      lastAttemptTime: 0,
+      attemptCountToday: 0,
+      lastBlockScreenLaunchAt: 0,
+      lastBlockScreenError: null,
+    };
+  }
+
+  return BlockerModule.getDiagnostics();
+};
+
+export const openBatteryOptimizationSettings = async () => {
+  if (!isAndroid || !BlockerModule?.openBatteryOptimizationSettings) return;
+  BlockerModule.openBatteryOptimizationSettings();
+};
+
+export const openAppDetailsSettings = async () => {
+  if (!isAndroid || !BlockerModule?.openAppDetailsSettings) return;
+  BlockerModule.openAppDetailsSettings();
 };
 
 export const getAttemptStats = async (): Promise<AttemptStats> => {

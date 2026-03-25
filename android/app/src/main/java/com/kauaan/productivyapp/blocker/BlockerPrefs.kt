@@ -1,4 +1,4 @@
-package com.kauaan.productivy.blocker
+package com.kauaan.productivyapp.blocker
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -14,6 +14,11 @@ object BlockerPrefs {
   private const val KEY_ATTEMPT_COUNT = "attempt_count"
   private const val KEY_LAST_ATTEMPT_PACKAGE = "last_attempt_package"
   private const val KEY_LAST_ATTEMPT_TIME = "last_attempt_time"
+  private const val KEY_SERVICE_CONNECTED_AT = "service_connected_at"
+  private const val KEY_LAST_EVENT_PACKAGE = "last_event_package"
+  private const val KEY_LAST_EVENT_TIME = "last_event_time"
+  private const val KEY_LAST_BLOCK_SCREEN_LAUNCH_AT = "last_block_screen_launch_at"
+  private const val KEY_LAST_BLOCK_SCREEN_ERROR = "last_block_screen_error"
 
   private fun prefs(context: Context): SharedPreferences =
       context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -69,6 +74,38 @@ object BlockerPrefs {
     }
   }
 
+  fun recordServiceConnected(context: Context) {
+    try {
+      prefs(context).edit().putLong(KEY_SERVICE_CONNECTED_AT, System.currentTimeMillis()).apply()
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
+
+  fun recordWindowEvent(context: Context, packageName: String) {
+    try {
+      prefs(context)
+          .edit()
+          .putString(KEY_LAST_EVENT_PACKAGE, packageName)
+          .putLong(KEY_LAST_EVENT_TIME, System.currentTimeMillis())
+          .apply()
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
+
+  fun recordBlockScreenLaunch(context: Context, errorMessage: String?) {
+    try {
+      prefs(context)
+          .edit()
+          .putLong(KEY_LAST_BLOCK_SCREEN_LAUNCH_AT, System.currentTimeMillis())
+          .putString(KEY_LAST_BLOCK_SCREEN_ERROR, errorMessage)
+          .apply()
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
+
   fun getAttemptCount(context: Context): Int =
       prefs(context).getInt(KEY_ATTEMPT_COUNT, 0)
 
@@ -80,6 +117,21 @@ object BlockerPrefs {
 
   fun getLastAttemptTime(context: Context): Long =
       prefs(context).getLong(KEY_LAST_ATTEMPT_TIME, 0L)
+
+  fun getServiceConnectedAt(context: Context): Long =
+      prefs(context).getLong(KEY_SERVICE_CONNECTED_AT, 0L)
+
+  fun getLastEventPackage(context: Context): String? =
+      prefs(context).getString(KEY_LAST_EVENT_PACKAGE, null)
+
+  fun getLastEventTime(context: Context): Long =
+      prefs(context).getLong(KEY_LAST_EVENT_TIME, 0L)
+
+  fun getLastBlockScreenLaunchAt(context: Context): Long =
+      prefs(context).getLong(KEY_LAST_BLOCK_SCREEN_LAUNCH_AT, 0L)
+
+  fun getLastBlockScreenError(context: Context): String? =
+      prefs(context).getString(KEY_LAST_BLOCK_SCREEN_ERROR, null)
 
   private fun dateStamp(timestamp: Long): String {
     val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)

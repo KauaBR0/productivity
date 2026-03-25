@@ -1,4 +1,4 @@
-package com.kauaan.productivy
+package com.kauaan.productivyapp
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

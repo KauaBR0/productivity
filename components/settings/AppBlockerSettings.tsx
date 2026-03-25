@@ -1,8 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, ActivityIndicator, Platform, AppState, Pressable } from 'react-native';
 import { useSettings } from '@/context/SettingsContext';
-import { Shield, ShieldCheck, Search, Check } from 'lucide-react-native';
-import { getInstalledApps, isAccessibilityEnabled, isAppBlockerAvailable, openAccessibilitySettings, InstalledApp } from '@/services/AppBlockerService';
+import { Shield, ShieldCheck, Search, Check, TriangleAlert, Lock, LockOpen, TimerReset } from 'lucide-react-native';
+import {
+  getBlockerDiagnostics,
+  getInstalledApps,
+  isAccessibilityEnabled,
+  isAppBlockerAvailable,
+  openAccessibilitySettings,
+  openAppDetailsSettings,
+  openBatteryOptimizationSettings,
+  InstalledApp,
+  BlockerDiagnostics,
+} from '@/services/AppBlockerService';
 import { PressableScale } from '@/components/PressableScale';
 import { Theme } from '@/constants/theme';
 
@@ -10,6 +20,8 @@ interface AppBlockerSettingsProps {
   styles: any;
   theme: Theme;
 }
+
+const APP_UNLOCK_WAIT_SECONDS = 7 * 60;
 
 export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, theme }) => {
   const { blockedApps, setBlockedApps } = useSettings();
@@ -19,27 +31,68 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
   const [appsLoading, setAppsLoading] = useState(false);
   const [appsError, setAppsError] = useState<string | null>(null);
   const [appSearch, setAppSearch] = useState('');
+  const [diagnostics, setDiagnostics] = useState<BlockerDiagnostics | null>(null);
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
+  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
+  const [unlockPhase, setUnlockPhase] = useState<'locked' | 'counting' | 'unlocked'>('locked');
+  const [unlockStartedAt, setUnlockStartedAt] = useState<number | null>(null);
+  const [unlockSecondsLeft, setUnlockSecondsLeft] = useState(APP_UNLOCK_WAIT_SECONDS);
 
-  const checkAccessibility = async () => {
+  const resetUnlockState = React.useCallback(() => {
+    setUnlockPhase('locked');
+    setUnlockStartedAt(null);
+    setUnlockSecondsLeft(APP_UNLOCK_WAIT_SECONDS);
+  }, []);
+
+  const loadDiagnostics = async () => {
     try {
-      const enabled = await isAccessibilityEnabled();
+      setDiagnosticsLoading(true);
+      setDiagnosticsError(null);
+      const [enabled, nextDiagnostics] = await Promise.all([
+        isAccessibilityEnabled(),
+        getBlockerDiagnostics(),
+      ]);
       setAccessibilityEnabled(Boolean(enabled));
+      setDiagnostics(nextDiagnostics);
     } catch {
-      setAccessibilityEnabled(false);
+      setDiagnosticsError('Nao foi possivel carregar o diagnostico do bloqueador.');
+    } finally {
+      setDiagnosticsLoading(false);
     }
   };
 
   React.useEffect(() => {
     if (Platform.OS !== 'android') return;
     if (!blockerAvailable) return;
-    void checkAccessibility();
+    void loadDiagnostics();
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        void checkAccessibility();
+        void loadDiagnostics();
+      } else {
+        resetUnlockState();
       }
     });
     return () => subscription.remove();
-  }, [blockerAvailable]);
+  }, [blockerAvailable, resetUnlockState]);
+
+  React.useEffect(() => {
+    if (unlockPhase !== 'counting' || !unlockStartedAt) return;
+
+    const updateCountdown = () => {
+      const elapsed = Math.floor((Date.now() - unlockStartedAt) / 1000);
+      const remaining = Math.max(0, APP_UNLOCK_WAIT_SECONDS - elapsed);
+      setUnlockSecondsLeft(remaining);
+
+      if (remaining === 0) {
+        setUnlockPhase('unlocked');
+        setUnlockStartedAt(null);
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [unlockPhase, unlockStartedAt]);
 
   React.useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -103,9 +156,80 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
     }).map(key => ({ title: key, data: groups[key] }));
   }, [visibleApps]);
 
+  const blockedAppDetails = useMemo(() => {
+    const appMap = new Map(installedApps.map((app) => [app.packageName, app]));
+    return blockedApps.map((packageName) => {
+      const app = appMap.get(packageName);
+      return {
+        packageName,
+        label: app?.label || packageName,
+      };
+    });
+  }, [blockedApps, installedApps]);
+
+  const formatDiagnosticTime = (timestamp: number) => {
+    if (!timestamp) return 'Ainda nao registrado';
+    return new Date(timestamp).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const manufacturerName = diagnostics?.manufacturer || diagnostics?.brand || '';
+  const canRemoveBlockedApps = unlockPhase === 'unlocked';
+  const isXiaomiFamily = useMemo(() => {
+    const vendor = manufacturerName.toLowerCase();
+    return vendor.includes('xiaomi') || vendor.includes('redmi') || vendor.includes('poco');
+  }, [manufacturerName]);
+
+  const diagnosisText = useMemo(() => {
+    if (!diagnostics) return 'Abra esta tela no aparelho afetado para coletar sinais do bloqueador.';
+    if (!diagnostics.accessibilityEnabled) {
+      return 'A acessibilidade esta desligada ou o servico nao foi reconhecido pelo sistema.';
+    }
+    if (!diagnostics.ignoringBatteryOptimizations) {
+      return 'O Android ainda pode restringir o servico em segundo plano por bateria.';
+    }
+    if (diagnostics.lastAttemptTime > 0 && diagnostics.lastBlockScreenError) {
+      return 'O app interceptou tentativas, mas houve falha ao abrir a tela de bloqueio.';
+    }
+    if (diagnostics.lastEventTime === 0) {
+      return 'Ainda nao ha eventos recentes; tente abrir um app bloqueado para validar o fluxo.';
+    }
+    return 'O servico parece ativo. Se falhar no Xiaomi, o mais provavel e bloqueio de bateria ou launch em segundo plano.';
+  }, [diagnostics]);
+
+  const unlockStatusText = useMemo(() => {
+    if (blockedApps.length === 0) {
+      return 'Nenhum app bloqueado no momento. Marque apps abaixo para adiciona-los a lista.';
+    }
+    if (unlockPhase === 'unlocked') {
+      return 'Desbloqueio liberado nesta sessao. Agora voce pode desmarcar os apps bloqueados abaixo.';
+    }
+    if (unlockPhase === 'counting') {
+      return 'Mantenha o Productivy aberto ate o fim da contagem para liberar a remocao dos apps bloqueados.';
+    }
+    return 'Para remover apps da lista, e obrigatorio aguardar 7 minutos com o app aberto.';
+  }, [blockedApps.length, unlockPhase]);
+
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const startUnlockCountdown = () => {
+    setUnlockPhase('counting');
+    setUnlockStartedAt(Date.now());
+    setUnlockSecondsLeft(APP_UNLOCK_WAIT_SECONDS);
+  };
+
   const toggleBlockedApp = (packageName: string) => {
     const next = new Set(blockedSet);
     if (next.has(packageName)) {
+      if (!canRemoveBlockedApps) return;
       next.delete(packageName);
     } else {
       next.add(packageName);
@@ -157,6 +281,158 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
             </PressableScale>
           </View>
 
+          <View style={styles.blockerDiagnosticsCard}>
+            <View style={styles.blockerDiagnosticsHeader}>
+              <View style={styles.blockerDiagnosticsTitleWrap}>
+                <Text style={styles.blockerDiagnosticsTitle}>Diagnostico do bloqueador</Text>
+                <Text style={styles.blockerDiagnosticsSubtitle}>
+                  {diagnostics?.model ? `${manufacturerName} ${diagnostics.model}`.trim() : 'Android'}
+                </Text>
+              </View>
+              <PressableScale
+                style={styles.blockerSecondaryButton}
+                onPress={() => {
+                  void loadDiagnostics();
+                }}
+              >
+                <Text style={styles.blockerSecondaryButtonText}>Atualizar</Text>
+              </PressableScale>
+            </View>
+
+            {diagnosticsLoading ? (
+              <View style={styles.blockerLoading}>
+                <ActivityIndicator color={theme.colors.accent} />
+                <Text style={styles.blockerHint}>Coletando sinais do bloqueador...</Text>
+              </View>
+            ) : diagnosticsError ? (
+              <Text style={styles.blockerError}>{diagnosticsError}</Text>
+            ) : (
+              <>
+                <View style={styles.blockerDiagnosticChips}>
+                  <View style={[styles.blockerDiagnosticChip, accessibilityEnabled ? styles.blockerDiagnosticChipGood : styles.blockerDiagnosticChipWarn]}>
+                    <Text style={styles.blockerDiagnosticChipText}>
+                      {accessibilityEnabled ? 'Acessibilidade OK' : 'Acessibilidade OFF'}
+                    </Text>
+                  </View>
+                  <View style={[styles.blockerDiagnosticChip, diagnostics?.ignoringBatteryOptimizations ? styles.blockerDiagnosticChipGood : styles.blockerDiagnosticChipWarn]}>
+                    <Text style={styles.blockerDiagnosticChipText}>
+                      {diagnostics?.ignoringBatteryOptimizations ? 'Bateria livre' : 'Bateria restrita'}
+                    </Text>
+                  </View>
+                  <View style={[styles.blockerDiagnosticChip, diagnostics?.sessionActive ? styles.blockerDiagnosticChipGood : styles.blockerDiagnosticChipNeutral]}>
+                    <Text style={styles.blockerDiagnosticChipText}>
+                      {diagnostics?.sessionActive ? 'Sessao ativa' : 'Sessao inativa'}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={styles.blockerDiagnosticSummary}>{diagnosisText}</Text>
+
+                <View style={styles.blockerDiagnosticFacts}>
+                  <Text style={styles.blockerDiagnosticFact}>Servico conectado: {formatDiagnosticTime(diagnostics?.serviceConnectedAt || 0)}</Text>
+                  <Text style={styles.blockerDiagnosticFact}>Ultimo evento: {diagnostics?.lastEventPackage || 'Nenhum'} {diagnostics?.lastEventTime ? `(${formatDiagnosticTime(diagnostics.lastEventTime)})` : ''}</Text>
+                  <Text style={styles.blockerDiagnosticFact}>Ultima tentativa bloqueada: {diagnostics?.lastAttemptPackage || 'Nenhuma'} {diagnostics?.lastAttemptTime ? `(${formatDiagnosticTime(diagnostics.lastAttemptTime)})` : ''}</Text>
+                  <Text style={styles.blockerDiagnosticFact}>Apps selecionados: {diagnostics?.blocklistSize || 0}</Text>
+                </View>
+
+                {diagnostics?.lastBlockScreenError ? (
+                  <View style={styles.blockerWarningBanner}>
+                    <TriangleAlert color={theme.colors.danger} size={16} />
+                    <Text style={styles.blockerWarningText}>
+                      Falha recente ao abrir a tela de bloqueio: {diagnostics.lastBlockScreenError}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {isXiaomiFamily ? (
+                  <View style={styles.blockerWarningBanner}>
+                    <TriangleAlert color={theme.colors.accent} size={16} />
+                    <Text style={styles.blockerWarningText}>
+                      Xiaomi/Redmi/Poco costuma exigir Autostart, bateria sem restricoes e revisao manual das permissoes apos reiniciar.
+                    </Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.blockerActionRow}>
+                  <PressableScale
+                    style={styles.blockerSecondaryButton}
+                    onPress={() => {
+                      void openBatteryOptimizationSettings();
+                    }}
+                  >
+                    <Text style={styles.blockerSecondaryButtonText}>Bateria</Text>
+                  </PressableScale>
+                  <PressableScale
+                    style={styles.blockerSecondaryButton}
+                    onPress={() => {
+                      void openAppDetailsSettings();
+                    }}
+                  >
+                    <Text style={styles.blockerSecondaryButtonText}>Permissoes</Text>
+                  </PressableScale>
+                </View>
+              </>
+            )}
+          </View>
+
+          <View style={styles.blockerUnlockCard}>
+            <View style={styles.blockerUnlockHeader}>
+              <View style={styles.blockerUnlockTitleWrap}>
+                <Text style={styles.blockerDiagnosticsTitle}>Gerenciar apps bloqueados</Text>
+                <Text style={styles.blockerDiagnosticsSubtitle}>
+                  Adicionar e imediato. Remover exige 7 minutos com o app aberto.
+                </Text>
+              </View>
+              <View style={styles.blockerUnlockIconWrap}>
+                {unlockPhase === 'unlocked' ? (
+                  <LockOpen color={theme.colors.accent} size={18} />
+                ) : unlockPhase === 'counting' ? (
+                  <TimerReset color={theme.colors.accent} size={18} />
+                ) : (
+                  <Lock color={theme.colors.textMuted} size={18} />
+                )}
+              </View>
+            </View>
+
+            <Text style={styles.blockerDiagnosticSummary}>{unlockStatusText}</Text>
+
+            {blockedAppDetails.length > 0 ? (
+              <View style={styles.blockerBlockedChips}>
+                {blockedAppDetails.map((app) => (
+                  <View key={app.packageName} style={styles.blockerBlockedChip}>
+                    <Text style={styles.blockerBlockedChipText}>{app.label}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            <View style={styles.blockerUnlockMetaRow}>
+              <Text style={styles.blockerDiagnosticFact}>Apps bloqueados: {blockedApps.length}</Text>
+              <Text style={styles.blockerUnlockTimerText}>
+                {unlockPhase === 'counting'
+                  ? formatCountdown(unlockSecondsLeft)
+                  : unlockPhase === 'unlocked'
+                    ? 'Liberado'
+                    : '07:00'}
+              </Text>
+            </View>
+
+            {!canRemoveBlockedApps && blockedApps.length > 0 ? (
+              <PressableScale
+                style={styles.blockerStatusButton}
+                onPress={unlockPhase === 'counting' ? resetUnlockState : startUnlockCountdown}
+              >
+                <Text style={styles.blockerStatusButtonText}>
+                  {unlockPhase === 'counting' ? 'Cancelar contagem' : 'Iniciar espera de 7 min'}
+                </Text>
+              </PressableScale>
+            ) : canRemoveBlockedApps ? (
+              <PressableScale style={styles.blockerSecondaryButton} onPress={resetUnlockState}>
+                <Text style={styles.blockerSecondaryButtonText}>Bloquear remocao novamente</Text>
+              </PressableScale>
+            ) : null}
+          </View>
+
           <View style={styles.blockerSearchRow}>
             <Search color={theme.colors.textMuted} size={16} />
             <TextInput
@@ -184,18 +460,30 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
                     <Text style={styles.categoryHeader}>{group.title}</Text>
                     {group.data.map((app) => {
                       const selected = blockedSet.has(app.packageName);
+                      const rowLocked = selected && !canRemoveBlockedApps;
                       return (
                         <Pressable
                           key={app.packageName}
                           onPress={() => toggleBlockedApp(app.packageName)}
-                          style={[styles.blockerAppRow, selected && styles.blockerAppRowActive]}
+                          disabled={rowLocked}
+                          style={[
+                            styles.blockerAppRow,
+                            selected && styles.blockerAppRowActive,
+                            rowLocked && styles.blockerAppRowLocked,
+                          ]}
                         >
                           <View style={styles.blockerAppInfo}>
                             <Text style={styles.blockerAppName}>{app.label}</Text>
                             <Text style={styles.blockerAppPackage}>{app.packageName}</Text>
                           </View>
                           <View style={[styles.blockerCheck, selected && styles.blockerCheckActive]}>
-                            {selected && <Check color={theme.colors.accentDark} size={14} />}
+                            {selected ? (
+                              rowLocked ? (
+                                <Lock color={theme.colors.accentDark} size={12} />
+                              ) : (
+                                <Check color={theme.colors.accentDark} size={14} />
+                              )
+                            ) : null}
                           </View>
                         </Pressable>
                       );
@@ -208,6 +496,11 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
                 {filteredApps.length > visibleApps.length && (
                   <Text style={styles.blockerHint}>
                     Mostrando {visibleApps.length} de {filteredApps.length}. Refine sua busca.
+                  </Text>
+                )}
+                {blockedApps.length > 0 && !canRemoveBlockedApps && (
+                  <Text style={styles.blockerHint}>
+                    Apps ja bloqueados ficam travados ate o fim da espera de 7 minutos.
                   </Text>
                 )}
               </>

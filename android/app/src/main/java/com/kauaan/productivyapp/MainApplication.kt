@@ -1,4 +1,4 @@
-package com.kauaan.productivy
+package com.kauaan.productivyapp
 
 import android.app.Application
 import android.content.res.Configuration
@@ -12,7 +12,7 @@ import com.facebook.react.ReactHost
 import com.facebook.react.common.ReleaseLevel
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 import com.facebook.react.defaults.DefaultReactNativeHost
-import com.kauaan.productivy.blocker.BlockerPackage
+import com.kauaan.productivyapp.blocker.BlockerPackage
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper

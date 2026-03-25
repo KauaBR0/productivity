@@ -59,5 +59,5 @@ export const REWARDS = [
   'Redes Sociais',
   'Jogos',
   'Filmes/Séries',
-  'Show de Stand-up',
+  'YouTube',
 ];

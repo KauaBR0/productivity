@@ -80,7 +80,6 @@ export default function GroupRankingScreen() {
     if (index === 2) { medalColor = '#CD7F32'; medalIcon = '🥉'; }
 
     const handlePress = () => {
-      if (item.isBot) return;
       if (item.isUser) {
         router.push('/profile');
         return;
@@ -92,7 +91,6 @@ export default function GroupRankingScreen() {
       <PressableScale
         style={[styles.rankItem, item.isUser && styles.userHighlight]}
         onPress={handlePress}
-        disabled={item.isBot}
       >
         <View style={styles.rankLeft}>
           <View style={styles.positionContainer}>

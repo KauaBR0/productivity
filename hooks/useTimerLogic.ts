@@ -122,6 +122,13 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
   const lastForegroundUpdateRef = useRef(0);
   const lastBlockerActiveRef = useRef<boolean | null>(null);
   const lastAppliedBlocklistRef = useRef<string | null>(null);
+  const shouldKeepBlockerRef = useRef(false);
+  const blockerShouldRemainActiveRef = useRef(false);
+  const latestBlockedAppsRef = useRef<string[]>(blockedApps);
+
+  useEffect(() => {
+    latestBlockedAppsRef.current = blockedApps;
+  }, [blockedApps]);
 
   // Initialize / Restore
   useEffect(() => {
@@ -138,8 +145,9 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
 
       // Try to restore from storage first
       const restored = await restoreFromStorage();
-      
-      if (!restored || storeCycleId !== cycle.id) {
+      const restoredState = useTimerStore.getState();
+
+      if (!restored || restoredState.cycleId !== cycle.id) {
         // New session initialization
         setCycleId(cycle.id as string);
         const initialTime = isInfiniteCycle ? 0 : cycle.focusDuration * 60;
@@ -292,6 +300,7 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
       (phase === 'focus' && isActive && !showOneMoreModal && !showRewardEndModal && !showRestEndModal) ||
       shouldApplyRewardSectionOverride;
 
+    blockerShouldRemainActiveRef.current = shouldEnableBlockerSession;
     const nextActive = shouldEnableBlockerSession;
     if (lastBlockerActiveRef.current === nextActive) return;
     lastBlockerActiveRef.current = nextActive;
@@ -309,12 +318,17 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
   useEffect(() => {
     return () => {
       if (Platform.OS !== 'android') return;
+      if (shouldKeepBlockerRef.current && blockerShouldRemainActiveRef.current) {
+        return;
+      }
+
+      lastBlockerActiveRef.current = null;
       lastAppliedBlocklistRef.current = null;
-      const fallbackBlocklist = Array.from(new Set(blockedApps.filter(Boolean))).sort();
+      const fallbackBlocklist = Array.from(new Set(latestBlockedAppsRef.current.filter(Boolean))).sort();
       void setBlocklist(fallbackBlocklist);
       void setSessionActive(false);
     };
-  }, [blockedApps]);
+  }, []);
 
   useEffect(() => {
     if (phase !== 'focus' && isDeepFocus) {
@@ -714,6 +728,7 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
 
     if (action === 'background') {
       shouldKeepFocusRef.current = phase === 'focus' && isActive && !showOneMoreModal;
+      shouldKeepBlockerRef.current = blockerShouldRemainActiveRef.current;
       await persistTimerState();
       router.back();
       return;
@@ -723,6 +738,7 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
     skipInitRef.current = true;
     shouldPersistRef.current = false;
     shouldKeepFocusRef.current = false;
+    shouldKeepBlockerRef.current = false;
     if (isInfiniteCycle && phase === 'focus' && cycle) {
       const focusSeconds = Math.max(0, getFocusElapsedSeconds());
       if (focusSeconds > 0) {
@@ -753,6 +769,7 @@ export const useTimerLogic = (options?: { openActionDialog?: ActionDialogOpener 
     setEndTime(null);
     shouldPersistRef.current = false;
     shouldKeepFocusRef.current = false;
+    shouldKeepBlockerRef.current = false;
     await clearTimerState();
     await stopForegroundTimer();
     await cancelScheduledNotification();

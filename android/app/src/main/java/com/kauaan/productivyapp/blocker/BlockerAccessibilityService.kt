@@ -1,4 +1,4 @@
-package com.kauaan.productivy.blocker
+package com.kauaan.productivyapp.blocker
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
@@ -13,6 +13,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
   override fun onServiceConnected() {
     super.onServiceConnected()
+    BlockerPrefs.recordServiceConnected(this)
     Log.d("AppBlocker", "Service Connected")
   }
 
@@ -20,6 +21,7 @@ class BlockerAccessibilityService : AccessibilityService() {
     if (event == null) return
     if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
     val packageName = event.packageName?.toString() ?: return
+    BlockerPrefs.recordWindowEvent(this, packageName)
     
     // Log.d("AppBlocker", "Event detected from: $packageName") // Uncomment if very verbose needed
 
@@ -56,9 +58,11 @@ class BlockerAccessibilityService : AccessibilityService() {
         )
         putExtra(BlockScreenActivity.EXTRA_BLOCKED_PACKAGE, blockedPackage)
       }
+      BlockerPrefs.recordBlockScreenLaunch(this, null)
       startActivity(intent)
     } catch (e: Exception) {
       e.printStackTrace()
+      BlockerPrefs.recordBlockScreenLaunch(this, e.javaClass.simpleName + ": " + (e.message ?: "unknown"))
       Log.e("AppBlocker", "CRITICAL FAILURE launching block screen", e)
     }
   }

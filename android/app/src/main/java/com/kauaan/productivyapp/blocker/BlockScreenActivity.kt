@@ -1,12 +1,12 @@
-package com.kauaan.productivy.blocker
+package com.kauaan.productivyapp.blocker
 
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.kauaan.productivy.MainActivity
-import com.kauaan.productivy.R
+import com.kauaan.productivyapp.MainActivity
+import com.kauaan.productivyapp.R
 
 class BlockScreenActivity : AppCompatActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {

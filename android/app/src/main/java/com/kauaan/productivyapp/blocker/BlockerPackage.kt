@@ -1,4 +1,4 @@
-package com.kauaan.productivy.blocker
+package com.kauaan.productivyapp.blocker
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule

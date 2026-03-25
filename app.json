@@ -32,7 +32,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.kauaan.productivy"
+      "package": "com.kauaan.productivyapp"
     },
     "web": {
       "output": "static",

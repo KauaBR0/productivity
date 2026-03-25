@@ -7,6 +7,7 @@ import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ACTIVE_TIMER_STORAGE_KEY } from '@/types/timer';
 import { stopForegroundTimer } from '@/services/ForegroundTimerService';
+import { setSessionActive } from '@/services/AppBlockerService';
 
 // Mocks
 jest.mock('@/context/SettingsContext');
@@ -150,6 +151,23 @@ describe('useTimerLogic', () => {
     );
     expect(__mockBack).toHaveBeenCalled();
     expect(stopForegroundTimer).not.toHaveBeenCalled();
+  });
+
+  it('keeps blocker active when continuing in background and unmounting timer screen', async () => {
+    const openActionDialog = jest.fn().mockResolvedValue('background');
+    const { result, unmount } = renderHook(() => useTimerLogic({ openActionDialog }));
+
+    await waitFor(() => expect(result.current.isActive).toBe(true));
+
+    (setSessionActive as jest.Mock).mockClear();
+
+    await act(async () => {
+      await result.current.handleCancel();
+    });
+
+    unmount();
+
+    expect(setSessionActive).not.toHaveBeenCalledWith(false);
   });
 
   it('clears state and stops foreground timer when ending the cycle', async () => {
