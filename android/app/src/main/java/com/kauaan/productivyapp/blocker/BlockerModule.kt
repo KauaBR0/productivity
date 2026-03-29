@@ -1,6 +1,7 @@
 package com.kauaan.productivyapp.blocker
 
 import android.content.Intent
+import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -19,6 +20,26 @@ import android.util.Log
 
 class BlockerModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
+  companion object {
+    private val STRONG_FRICTION_PACKAGES = setOf(
+        "com.android.settings",
+        "com.android.packageinstaller",
+        "com.google.android.packageinstaller",
+        "com.samsung.android.packageinstaller",
+        "com.miui.packageinstaller",
+        "com.android.permissioncontroller",
+        "com.google.android.permissioncontroller",
+        "com.android.vending",
+        "com.sec.android.app.samsungapps",
+        "com.xiaomi.market",
+        "com.huawei.appmarket",
+        "com.heytap.market",
+        "com.oppo.market",
+        "com.miui.securitycenter",
+        "com.coloros.safecenter"
+    )
+  }
+
   override fun getName(): String = "AppBlocker"
 
   @ReactMethod
@@ -75,6 +96,9 @@ class BlockerModule(private val reactContext: ReactApplicationContext) :
         putBoolean("accessibilityEnabled", isAccessibilityServiceEnabled())
         putBoolean("sessionActive", BlockerPrefs.isSessionActive(reactContext))
         putInt("blocklistSize", BlockerPrefs.getBlocklist(reactContext).size)
+        putBoolean("totalFocusActive", BlockerPrefs.isTotalFocusActive(reactContext))
+        putDouble("totalFocusEndAt", BlockerPrefs.getTotalFocusEndAt(reactContext).toDouble())
+        putInt("totalFocusBlocklistSize", BlockerPrefs.getTotalFocusPackages(reactContext).size)
         putString("manufacturer", Build.MANUFACTURER ?: "")
         putString("brand", Build.BRAND ?: "")
         putString("model", Build.MODEL ?: "")
@@ -99,53 +123,46 @@ class BlockerModule(private val reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
+  fun enableTotalFocus(durationHours: Int, promise: Promise) {
+    try {
+      val safeDurationHours = durationHours.coerceIn(1, 24 * 30)
+      val blockablePackages =
+          (getLaunchableApps(includeHomeApps = false).map { it.packageName } + STRONG_FRICTION_PACKAGES)
+              .toSet()
+
+      if (blockablePackages.isEmpty()) {
+        promise.reject("ERR_TOTAL_FOCUS_EMPTY", "Nao foi possivel montar a lista de apps para o foco total.")
+        return
+      }
+
+      val now = System.currentTimeMillis()
+      val currentEndAt = BlockerPrefs.getTotalFocusEndAt(reactContext)
+      val baseTime = maxOf(now, currentEndAt)
+      val nextEndAt = baseTime + safeDurationHours * 60L * 60L * 1000L
+
+      BlockerPrefs.setTotalFocus(reactContext, blockablePackages, nextEndAt)
+
+      val map = Arguments.createMap().apply {
+        putBoolean("active", true)
+        putDouble("endAt", nextEndAt.toDouble())
+        putInt("blockedAppsCount", blockablePackages.size)
+      }
+
+      promise.resolve(map)
+    } catch (error: Exception) {
+      promise.reject("ERR_TOTAL_FOCUS_ENABLE", error)
+    }
+  }
+
+  @ReactMethod
   fun getInstalledApps(promise: Promise) {
     try {
-      val pm = reactContext.packageManager
-      val intent = Intent(Intent.ACTION_MAIN, null).apply {
-        addCategory(Intent.CATEGORY_LAUNCHER)
-      }
-      val resolveInfos = pm.queryIntentActivities(intent, 0)
-      
-      // Map: PackageName -> { Label, Category }
-      val appMap = LinkedHashMap<String, Pair<String, String>>()
-      
-      resolveInfos.forEach { info ->
-        val pkg = info.activityInfo.packageName ?: return@forEach
-        if (pkg == reactContext.packageName) return@forEach
-        
-        val label = info.loadLabel(pm)?.toString() ?: pkg
-        
-        if (!appMap.containsKey(pkg)) {
-            // Determine Category
-            var category = "Outros"
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                val appInfo = info.activityInfo.applicationInfo
-                category = when (appInfo.category) {
-                    ApplicationInfo.CATEGORY_GAME -> "Jogos"
-                    ApplicationInfo.CATEGORY_AUDIO -> "Música & Áudio"
-                    ApplicationInfo.CATEGORY_VIDEO -> "Vídeo"
-                    ApplicationInfo.CATEGORY_IMAGE -> "Foto & Vídeo"
-                    ApplicationInfo.CATEGORY_SOCIAL -> "Redes Sociais"
-                    ApplicationInfo.CATEGORY_NEWS -> "Notícias"
-                    ApplicationInfo.CATEGORY_MAPS -> "Mapas & Navegação"
-                    ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Produtividade"
-                    else -> "Outros"
-                }
-            }
-            appMap[pkg] = Pair(label, category)
-        }
-      }
-      
-      val launchable = appMap.entries
-          .sortedBy { it.value.first.lowercase(Locale.getDefault()) }
-
       val result = Arguments.createArray()
-      launchable.forEach { (pkg, data) ->
+      getLaunchableApps().forEach { app ->
         val map = Arguments.createMap()
-        map.putString("packageName", pkg)
-        map.putString("label", data.first)
-        map.putString("category", data.second)
+        map.putString("packageName", app.packageName)
+        map.putString("label", app.label)
+        map.putString("category", app.category)
         result.pushMap(map)
       }
       promise.resolve(result)
@@ -225,6 +242,65 @@ class BlockerModule(private val reactContext: ReactApplicationContext) :
       addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
     reactContext.startActivity(intent)
+  }
+
+  private data class LaunchableApp(
+      val packageName: String,
+      val label: String,
+      val category: String
+  )
+
+  private fun getLaunchableApps(includeHomeApps: Boolean = true): List<LaunchableApp> {
+    val pm = reactContext.packageManager
+    val intent = Intent(Intent.ACTION_MAIN, null).apply {
+      addCategory(Intent.CATEGORY_LAUNCHER)
+    }
+    val resolveInfos = pm.queryIntentActivities(intent, 0)
+    val defaultHomePackage = if (includeHomeApps) null else getDefaultHomePackage()
+
+    val appMap = LinkedHashMap<String, LaunchableApp>()
+
+    resolveInfos.forEach { info ->
+      val pkg = info.activityInfo.packageName ?: return@forEach
+      if (pkg == reactContext.packageName) return@forEach
+      if (!includeHomeApps && pkg == defaultHomePackage) return@forEach
+
+      val label = info.loadLabel(pm)?.toString() ?: pkg
+      if (!appMap.containsKey(pkg)) {
+        appMap[pkg] = LaunchableApp(pkg, label, resolveCategory(info))
+      }
+    }
+
+    return appMap.values.sortedBy { it.label.lowercase(Locale.getDefault()) }
+  }
+
+  private fun resolveCategory(info: ResolveInfo): String {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+      return "Outros"
+    }
+
+    val appInfo = info.activityInfo.applicationInfo
+    return when (appInfo.category) {
+      ApplicationInfo.CATEGORY_GAME -> "Jogos"
+      ApplicationInfo.CATEGORY_AUDIO -> "Música & Áudio"
+      ApplicationInfo.CATEGORY_VIDEO -> "Vídeo"
+      ApplicationInfo.CATEGORY_IMAGE -> "Foto & Vídeo"
+      ApplicationInfo.CATEGORY_SOCIAL -> "Redes Sociais"
+      ApplicationInfo.CATEGORY_NEWS -> "Notícias"
+      ApplicationInfo.CATEGORY_MAPS -> "Mapas & Navegação"
+      ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Produtividade"
+      else -> "Outros"
+    }
+  }
+
+  private fun getDefaultHomePackage(): String? {
+    val pm = reactContext.packageManager
+    val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+      addCategory(Intent.CATEGORY_HOME)
+    }
+    val homeActivity = pm.resolveActivity(homeIntent, 0) ?: return null
+    val packageName = homeActivity.activityInfo?.packageName
+    return if (packageName == "android") null else packageName
   }
 
   private fun isServiceEnabled(context: ReactApplicationContext, serviceId: String): Boolean {

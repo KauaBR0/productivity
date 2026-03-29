@@ -19,6 +19,8 @@ object BlockerPrefs {
   private const val KEY_LAST_EVENT_TIME = "last_event_time"
   private const val KEY_LAST_BLOCK_SCREEN_LAUNCH_AT = "last_block_screen_launch_at"
   private const val KEY_LAST_BLOCK_SCREEN_ERROR = "last_block_screen_error"
+  private const val KEY_TOTAL_FOCUS_PACKAGES = "total_focus_packages"
+  private const val KEY_TOTAL_FOCUS_END_AT = "total_focus_end_at"
 
   private fun prefs(context: Context): SharedPreferences =
       context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -54,6 +56,50 @@ object BlockerPrefs {
       } catch (e: Exception) {
           e.printStackTrace()
       }
+  }
+
+  fun isTotalFocusActive(context: Context): Boolean {
+    val endAt = getTotalFocusEndAt(context)
+    return endAt > System.currentTimeMillis() && getTotalFocusPackages(context).isNotEmpty()
+  }
+
+  fun getTotalFocusPackages(context: Context): Set<String> {
+    val endAt = prefs(context).getLong(KEY_TOTAL_FOCUS_END_AT, 0L)
+    if (endAt > 0L && endAt <= System.currentTimeMillis()) {
+      clearTotalFocus(context)
+      return emptySet()
+    }
+
+    return try {
+      val stored = prefs(context).getStringSet(KEY_TOTAL_FOCUS_PACKAGES, emptySet())
+      stored?.toSet() ?: emptySet()
+    } catch (e: Exception) {
+      emptySet()
+    }
+  }
+
+  fun setTotalFocus(context: Context, packages: Set<String>, endAt: Long) {
+    try {
+      prefs(context)
+          .edit()
+          .putStringSet(KEY_TOTAL_FOCUS_PACKAGES, packages)
+          .putLong(KEY_TOTAL_FOCUS_END_AT, endAt)
+          .apply()
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
+
+  fun clearTotalFocus(context: Context) {
+    try {
+      prefs(context)
+          .edit()
+          .remove(KEY_TOTAL_FOCUS_PACKAGES)
+          .remove(KEY_TOTAL_FOCUS_END_AT)
+          .apply()
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
   }
 
   fun recordAttempt(context: Context, packageName: String) {
@@ -132,6 +178,15 @@ object BlockerPrefs {
 
   fun getLastBlockScreenError(context: Context): String? =
       prefs(context).getString(KEY_LAST_BLOCK_SCREEN_ERROR, null)
+
+  fun getTotalFocusEndAt(context: Context): Long {
+    val endAt = prefs(context).getLong(KEY_TOTAL_FOCUS_END_AT, 0L)
+    if (endAt > 0L && endAt <= System.currentTimeMillis()) {
+      clearTotalFocus(context)
+      return 0L
+    }
+    return endAt
+  }
 
   private fun dateStamp(timestamp: Long): String {
     val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)

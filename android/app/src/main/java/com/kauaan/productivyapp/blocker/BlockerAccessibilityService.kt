@@ -26,10 +26,16 @@ class BlockerAccessibilityService : AccessibilityService() {
     // Log.d("AppBlocker", "Event detected from: $packageName") // Uncomment if very verbose needed
 
     if (packageName == this.packageName) return
-    if (!BlockerPrefs.isSessionActive(this)) return
-    
-    val blocklist = BlockerPrefs.getBlocklist(this)
-    if (!blocklist.contains(packageName)) return
+
+    val totalFocusPackages = BlockerPrefs.getTotalFocusPackages(this)
+    val isBlockedByTotalFocus =
+        BlockerPrefs.isTotalFocusActive(this) && totalFocusPackages.contains(packageName)
+
+    val sessionBlocklist = BlockerPrefs.getBlocklist(this)
+    val isBlockedBySession =
+        BlockerPrefs.isSessionActive(this) && sessionBlocklist.contains(packageName)
+
+    if (!isBlockedByTotalFocus && !isBlockedBySession) return
 
     Log.d("AppBlocker", "Blocking package: $packageName")
 
@@ -41,14 +47,14 @@ class BlockerAccessibilityService : AccessibilityService() {
     lastBlockTimestamp = now
 
     BlockerPrefs.recordAttempt(this, packageName)
-    launchBlockScreen(packageName)
+    launchBlockScreen(packageName, isBlockedByTotalFocus)
   }
 
   override fun onInterrupt() {
     // No-op.
   }
 
-  private fun launchBlockScreen(blockedPackage: String) {
+  private fun launchBlockScreen(blockedPackage: String, blockedByTotalFocus: Boolean) {
     try {
       val intent = Intent(this, BlockScreenActivity::class.java).apply {
         addFlags(
@@ -57,6 +63,10 @@ class BlockerAccessibilityService : AccessibilityService() {
                 Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
         )
         putExtra(BlockScreenActivity.EXTRA_BLOCKED_PACKAGE, blockedPackage)
+        putExtra(BlockScreenActivity.EXTRA_TOTAL_FOCUS_MODE, blockedByTotalFocus)
+        if (blockedByTotalFocus) {
+          putExtra(BlockScreenActivity.EXTRA_TOTAL_FOCUS_END_AT, BlockerPrefs.getTotalFocusEndAt(this@BlockerAccessibilityService))
+        }
       }
       BlockerPrefs.recordBlockScreenLaunch(this, null)
       startActivity(intent)

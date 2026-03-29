@@ -7,6 +7,9 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.kauaan.productivyapp.MainActivity
 import com.kauaan.productivyapp.R
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class BlockScreenActivity : AppCompatActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -14,7 +17,17 @@ class BlockScreenActivity : AppCompatActivity() {
     setContentView(R.layout.activity_block_screen)
 
     val blockedPackage = intent.getStringExtra(EXTRA_BLOCKED_PACKAGE)
+    val totalFocusMode = intent.getBooleanExtra(EXTRA_TOTAL_FOCUS_MODE, false)
+    val totalFocusEndAt = intent.getLongExtra(EXTRA_TOTAL_FOCUS_END_AT, 0L)
     val packageText = findViewById<TextView>(R.id.blocked_package_text)
+    val titleText = findViewById<TextView>(R.id.blocked_title)
+    val subtitleText = findViewById<TextView>(R.id.blocked_subtitle)
+
+    if (totalFocusMode) {
+      titleText.text = "Bloqueado pelo foco total"
+      subtitleText.text = buildTotalFocusSubtitle(totalFocusEndAt)
+    }
+
     if (!blockedPackage.isNullOrBlank()) {
       packageText.text = blockedPackage
     }
@@ -39,7 +52,18 @@ class BlockScreenActivity : AppCompatActivity() {
     finish()
   }
 
+  private fun buildTotalFocusSubtitle(endAt: Long): String {
+    if (endAt <= 0L) {
+      return "Todos os apps ficam bloqueados ate o fim do foco total."
+    }
+
+    val formatter = SimpleDateFormat("dd/MM 'as' HH:mm", Locale("pt", "BR"))
+    return "Todos os apps ficam bloqueados ate ${formatter.format(Date(endAt))}."
+  }
+
   companion object {
     const val EXTRA_BLOCKED_PACKAGE = "blockedPackage"
+    const val EXTRA_TOTAL_FOCUS_MODE = "totalFocusMode"
+    const val EXTRA_TOTAL_FOCUS_END_AT = "totalFocusEndAt"
   }
 }

@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, TextInput, ActivityIndicator, Platform, AppState, Pressable } from 'react-native';
+import { View, Text, TextInput, ActivityIndicator, Platform, AppState, Pressable, Alert } from 'react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { Shield, ShieldCheck, Search, Check, TriangleAlert, Lock, LockOpen, TimerReset } from 'lucide-react-native';
 import {
+  enableTotalFocus,
   getBlockerDiagnostics,
   getInstalledApps,
   isAccessibilityEnabled,
@@ -15,6 +16,7 @@ import {
 } from '@/services/AppBlockerService';
 import { PressableScale } from '@/components/PressableScale';
 import { Theme } from '@/constants/theme';
+import Toast from 'react-native-toast-message';
 
 interface AppBlockerSettingsProps {
   styles: any;
@@ -22,6 +24,12 @@ interface AppBlockerSettingsProps {
 }
 
 const APP_UNLOCK_WAIT_SECONDS = 7 * 60;
+const TOTAL_FOCUS_OPTIONS = [
+  { hours: 24, label: '24 horas', detail: '1 dia inteiro' },
+  { hours: 48, label: '48 horas', detail: '2 dias seguidos' },
+  { hours: 72, label: '72 horas', detail: '3 dias seguidos' },
+  { hours: 168, label: '7 dias', detail: 'Modo extremo' },
+] as const;
 
 export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, theme }) => {
   const { blockedApps, setBlockedApps } = useSettings();
@@ -37,6 +45,8 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
   const [unlockPhase, setUnlockPhase] = useState<'locked' | 'counting' | 'unlocked'>('locked');
   const [unlockStartedAt, setUnlockStartedAt] = useState<number | null>(null);
   const [unlockSecondsLeft, setUnlockSecondsLeft] = useState(APP_UNLOCK_WAIT_SECONDS);
+  const [totalFocusActionHours, setTotalFocusActionHours] = useState<number | null>(null);
+  const [totalFocusNow, setTotalFocusNow] = useState(Date.now());
 
   const resetUnlockState = React.useCallback(() => {
     setUnlockPhase('locked');
@@ -93,6 +103,23 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
   }, [unlockPhase, unlockStartedAt]);
+
+  React.useEffect(() => {
+    if (!diagnostics?.totalFocusActive || !diagnostics.totalFocusEndAt) return;
+
+    const syncClock = () => {
+      const now = Date.now();
+      setTotalFocusNow(now);
+
+      if (now >= diagnostics.totalFocusEndAt) {
+        void loadDiagnostics();
+      }
+    };
+
+    syncClock();
+    const interval = setInterval(syncClock, 1000);
+    return () => clearInterval(interval);
+  }, [diagnostics?.totalFocusActive, diagnostics?.totalFocusEndAt]);
 
   React.useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -179,6 +206,9 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
 
   const manufacturerName = diagnostics?.manufacturer || diagnostics?.brand || '';
   const canRemoveBlockedApps = unlockPhase === 'unlocked';
+  const totalFocusRemainingMs = diagnostics?.totalFocusActive
+    ? Math.max(0, (diagnostics.totalFocusEndAt || 0) - totalFocusNow)
+    : 0;
   const isXiaomiFamily = useMemo(() => {
     const vendor = manufacturerName.toLowerCase();
     return vendor.includes('xiaomi') || vendor.includes('redmi') || vendor.includes('poco');
@@ -220,10 +250,64 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const formatLongCountdown = (milliseconds: number) => {
+    if (milliseconds <= 0) return '00h 00m';
+
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+    if (days > 0) {
+      return `${days}d ${hours.toString().padStart(2, '0')}h`;
+    }
+
+    return `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`;
+  };
+
   const startUnlockCountdown = () => {
     setUnlockPhase('counting');
     setUnlockStartedAt(Date.now());
     setUnlockSecondsLeft(APP_UNLOCK_WAIT_SECONDS);
+  };
+
+  const handleEnableTotalFocus = (hours: number, label: string) => {
+    Alert.alert(
+      'Ativar foco total?',
+      `Quase todos os apps instalados ficarao bloqueados por ${label.toLowerCase()}. O launcher principal continua liberado para evitar travar o aparelho.`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: diagnostics?.totalFocusActive ? 'Adicionar tempo' : 'Ativar agora',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                setTotalFocusActionHours(hours);
+                const result = await enableTotalFocus(hours);
+                await loadDiagnostics();
+                Toast.show({
+                  type: 'success',
+                  text1: diagnostics?.totalFocusActive ? 'Foco total estendido' : 'Foco total ativado',
+                  text2: `${result.blockedAppsCount} apps protegidos ate ${formatDiagnosticTime(result.endAt)}.`,
+                });
+              } catch (error: any) {
+                Toast.show({
+                  type: 'error',
+                  text1: 'Nao foi possivel ativar o foco total',
+                  text2: error?.message || 'Tente novamente em instantes.',
+                });
+              } finally {
+                setTotalFocusActionHours(null);
+              }
+            })();
+          },
+        },
+      ]
+    );
   };
 
   const toggleBlockedApp = (packageName: string) => {
@@ -281,6 +365,84 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
             </PressableScale>
           </View>
 
+          <View style={styles.totalFocusCard}>
+            <View style={styles.totalFocusHeader}>
+              <View style={styles.totalFocusTitleWrap}>
+                <Text style={styles.blockerDiagnosticsTitle}>Foco total</Text>
+                <Text style={styles.blockerDiagnosticsSubtitle}>
+                  Bloqueia quase todos os apps instalados e adiciona friccao extra contra desinstalacao.
+                </Text>
+              </View>
+              <View style={[
+                styles.totalFocusBadge,
+                diagnostics?.totalFocusActive ? styles.totalFocusBadgeActive : styles.totalFocusBadgeIdle,
+              ]}>
+                <Text style={styles.totalFocusBadgeText}>
+                  {diagnostics?.totalFocusActive ? 'ATIVO' : 'PRONTO'}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.blockerDiagnosticSummary}>
+              {diagnostics?.totalFocusActive
+                ? `Todos os apps selecionaveis ficam bloqueados ate ${formatDiagnosticTime(diagnostics.totalFocusEndAt)}.`
+                : 'Use quando quiser travar o celular inteiro para uma janela longa de foco.'}
+            </Text>
+
+            <View style={styles.blockerWarningBanner}>
+              <TriangleAlert color={theme.colors.accent} size={16} />
+              <Text style={styles.blockerWarningText}>
+                Durante o foco total, o app tambem tenta barrar Configuracoes, Play Store e instaladores para dificultar a desinstalacao em aparelhos comuns.
+              </Text>
+            </View>
+
+            <View style={styles.totalFocusStatusRow}>
+              <Text style={styles.blockerDiagnosticFact}>
+                Cobertura atual: {diagnostics?.totalFocusBlocklistSize || 0} apps
+              </Text>
+              <Text style={styles.totalFocusTimerText}>
+                {diagnostics?.totalFocusActive ? formatLongCountdown(totalFocusRemainingMs) : '00h 00m'}
+              </Text>
+            </View>
+
+            {!accessibilityEnabled ? (
+              <View style={styles.blockerWarningBanner}>
+                <TriangleAlert color={theme.colors.accent} size={16} />
+                <Text style={styles.blockerWarningText}>
+                  Ative a acessibilidade antes de ligar o foco total.
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={styles.totalFocusOptionGrid}>
+              {TOTAL_FOCUS_OPTIONS.map((option) => {
+                const loading = totalFocusActionHours === option.hours;
+                return (
+                  <PressableScale
+                    key={option.hours}
+                    style={[
+                      styles.totalFocusOptionButton,
+                      (!accessibilityEnabled || loading) && styles.totalFocusOptionButtonDisabled,
+                    ]}
+                    onPress={() => handleEnableTotalFocus(option.hours, option.label)}
+                    disabled={!accessibilityEnabled || loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color={theme.colors.accent} />
+                    ) : (
+                      <>
+                        <Text style={styles.totalFocusOptionLabel}>
+                          {diagnostics?.totalFocusActive ? `+${option.label}` : option.label}
+                        </Text>
+                        <Text style={styles.totalFocusOptionDetail}>{option.detail}</Text>
+                      </>
+                    )}
+                  </PressableScale>
+                );
+              })}
+            </View>
+          </View>
+
           <View style={styles.blockerDiagnosticsCard}>
             <View style={styles.blockerDiagnosticsHeader}>
               <View style={styles.blockerDiagnosticsTitleWrap}>
@@ -324,6 +486,11 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
                       {diagnostics?.sessionActive ? 'Sessao ativa' : 'Sessao inativa'}
                     </Text>
                   </View>
+                  <View style={[styles.blockerDiagnosticChip, diagnostics?.totalFocusActive ? styles.blockerDiagnosticChipGood : styles.blockerDiagnosticChipNeutral]}>
+                    <Text style={styles.blockerDiagnosticChipText}>
+                      {diagnostics?.totalFocusActive ? 'Foco total ON' : 'Foco total OFF'}
+                    </Text>
+                  </View>
                 </View>
 
                 <Text style={styles.blockerDiagnosticSummary}>{diagnosisText}</Text>
@@ -333,6 +500,7 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
                   <Text style={styles.blockerDiagnosticFact}>Ultimo evento: {diagnostics?.lastEventPackage || 'Nenhum'} {diagnostics?.lastEventTime ? `(${formatDiagnosticTime(diagnostics.lastEventTime)})` : ''}</Text>
                   <Text style={styles.blockerDiagnosticFact}>Ultima tentativa bloqueada: {diagnostics?.lastAttemptPackage || 'Nenhuma'} {diagnostics?.lastAttemptTime ? `(${formatDiagnosticTime(diagnostics.lastAttemptTime)})` : ''}</Text>
                   <Text style={styles.blockerDiagnosticFact}>Apps selecionados: {diagnostics?.blocklistSize || 0}</Text>
+                  <Text style={styles.blockerDiagnosticFact}>Foco total: {diagnostics?.totalFocusActive ? `ate ${formatDiagnosticTime(diagnostics.totalFocusEndAt)}` : 'desligado'}</Text>
                 </View>
 
                 {diagnostics?.lastBlockScreenError ? (

@@ -11,6 +11,9 @@ export type BlockerDiagnostics = {
   accessibilityEnabled: boolean;
   sessionActive: boolean;
   blocklistSize: number;
+  totalFocusActive: boolean;
+  totalFocusEndAt: number;
+  totalFocusBlocklistSize: number;
   manufacturer: string;
   brand: string;
   model: string;
@@ -29,6 +32,12 @@ export type InstalledApp = {
   packageName: string;
   label: string;
   category?: string;
+};
+
+export type TotalFocusActivationResult = {
+  active: boolean;
+  endAt: number;
+  blockedAppsCount: number;
 };
 
 const normalizeCategoryKey = (value: string) =>
@@ -170,6 +179,9 @@ export const getBlockerDiagnostics = async (): Promise<BlockerDiagnostics> => {
       accessibilityEnabled: false,
       sessionActive: false,
       blocklistSize: 0,
+      totalFocusActive: false,
+      totalFocusEndAt: 0,
+      totalFocusBlocklistSize: 0,
       manufacturer: '',
       brand: '',
       model: '',
@@ -186,6 +198,20 @@ export const getBlockerDiagnostics = async (): Promise<BlockerDiagnostics> => {
   }
 
   return BlockerModule.getDiagnostics();
+};
+
+export const enableTotalFocus = async (
+  durationHours: number
+): Promise<TotalFocusActivationResult> => {
+  if (!isAndroid || !BlockerModule?.enableTotalFocus) {
+    return {
+      active: false,
+      endAt: 0,
+      blockedAppsCount: 0,
+    };
+  }
+
+  return BlockerModule.enableTotalFocus(Math.max(1, Math.floor(durationHours)));
 };
 
 export const openBatteryOptimizationSettings = async () => {
