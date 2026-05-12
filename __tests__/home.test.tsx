@@ -1,7 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import HomeScreen from '../app/(tabs)/index';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTimerStore } from '@/store/useTimerStore';
 
 // --- Mocks ---
@@ -60,6 +59,17 @@ jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({ user: { name: 'Test User', avatar: null } }),
 }));
 
+const mockCompleteFeatureTour = jest.fn();
+let mockHasCompletedFeatureTour = true;
+
+jest.mock('@/context/OnboardingContext', () => ({
+  useOnboarding: () => ({
+    hasCompletedOnboarding: true,
+    hasCompletedFeatureTour: mockHasCompletedFeatureTour,
+    completeFeatureTour: mockCompleteFeatureTour,
+  }),
+}));
+
 jest.mock('@/context/GamificationContext', () => ({
   useGamification: () => ({ getPeriodStats: () => 30 }),
 }));
@@ -72,12 +82,22 @@ jest.mock('@/types/timer', () => ({
 describe('HomeScreen Resume Banner', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockHasCompletedFeatureTour = true;
     // Default: No active session
     (useTimerStore as unknown as jest.Mock).mockReturnValue({
       isActive: false,
       timeLeft: 0,
       cycleId: null,
     });
+  });
+
+  it('shows the home feature tour when it is still pending', async () => {
+    mockHasCompletedFeatureTour = false;
+
+    render(<HomeScreen />);
+
+    expect(screen.getByText(/GUIA DA HOME 1\/5/)).toBeTruthy();
+    expect(screen.getByText(/Comece pelas configuracoes/)).toBeTruthy();
   });
 
   it('renders Resume Banner when an active session is found in storage', async () => {

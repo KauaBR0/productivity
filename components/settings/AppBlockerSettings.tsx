@@ -239,7 +239,7 @@ export const AppBlockerSettings: React.FC<AppBlockerSettingsProps> = ({ styles, 
       return 'Desbloqueio liberado nesta sessao. Agora voce pode desmarcar os apps bloqueados abaixo.';
     }
     if (unlockPhase === 'counting') {
-      return 'Mantenha o Productivy aberto ate o fim da contagem para liberar a remocao dos apps bloqueados.';
+      return 'Mantenha o VTX aberto ate o fim da contagem para liberar a remocao dos apps bloqueados.';
     }
     return 'Para remover apps da lista, e obrigatorio aguardar 7 minutos com o app aberto.';
   }, [blockedApps.length, unlockPhase]);

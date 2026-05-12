@@ -46,7 +46,7 @@ export default function RegisterScreen() {
         text1: 'Conta criada',
         text2: result.referralApplied
           ? 'Bem-vindo! Seu codigo de indicacao foi aplicado.'
-          : 'Bem-vindo ao Productivy!',
+          : 'Bem-vindo ao VTX!',
       });
 
       if (result.referralError) {

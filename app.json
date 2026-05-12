@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "productivy",
+    "name": "VTX",
     "slug": "productivy",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -32,7 +32,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.kauaan.productivyapp"
+      "package": "com.kauaan.productivy"
     },
     "web": {
       "output": "static",

@@ -19,7 +19,7 @@ const timerTask = async (taskDataArguments: { interval: number }) => {
 };
 
 const baseOptions = {
-  taskName: 'Productivy Timer',
+  taskName: 'VTX Timer',
   taskIcon: {
     name: 'ic_launcher',
     type: 'mipmap',

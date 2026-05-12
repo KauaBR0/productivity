@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter, useSegments } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
@@ -63,8 +62,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
-  const segments = useSegments();
 
   useEffect(() => {
     // 1. Get initial session
@@ -120,23 +117,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { error } = await supabase.from('profiles').upsert(profilePayload);
     if (error) throw error;
   };
-
-  // Protected Route Logic
-  useEffect(() => {
-    if (isLoading) return;
-
-    const currentPath = segments.join('/');
-    const isPublicRoute =
-      currentPath === 'login' ||
-      currentPath === 'register' ||
-      currentPath === 'auth/callback';
-
-    if (!user && !isPublicRoute) {
-      router.replace('/login');
-    } else if (user && isPublicRoute) {
-      router.replace('/');
-    }
-  }, [user, segments, isLoading]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

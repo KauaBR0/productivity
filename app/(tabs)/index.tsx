@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useMemo } from 'react';
-import { StyleSheet, Text, View, ScrollView, SafeAreaView, StatusBar, Platform, Animated, Image } from 'react-native';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
+import { StyleSheet, Text, View, ScrollView, SafeAreaView, StatusBar, Platform, Animated, Image, type LayoutChangeEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CycleDef } from '@/constants/FocusConfig';
 import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
 import { useGamification } from '@/context/GamificationContext';
+import { useOnboarding } from '@/context/OnboardingContext';
 import { Play, Settings, Plus, Sparkles, BarChart3, RotateCcw } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import { Theme } from '@/constants/theme';
@@ -12,15 +13,25 @@ import { useTimerStore } from '@/store/useTimerStore';
 import { PressableScale } from '@/components/PressableScale';
 import { CycleCard } from '@/components/ui/CycleCard';
 
+type HomeTourStepId = 'settings' | 'hero' | 'goal' | 'infinite' | 'create';
+
 export default function HomeScreen() {
   const router = useRouter();
   const { cycles, theme, dailyGoalMinutes } = useSettings();
   const { user } = useAuth();
+  const {
+    hasCompletedOnboarding,
+    hasCompletedFeatureTour,
+    completeFeatureTour,
+  } = useOnboarding();
   const { getPeriodStats } = useGamification();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<ScrollView>(null);
   const dailyFocusMinutes = getPeriodStats('daily');
   const dailyProgress = Math.min(dailyFocusMinutes / dailyGoalMinutes, 1);
+  const [tourStepIndex, setTourStepIndex] = useState(0);
+  const [sectionLayouts, setSectionLayouts] = useState<Partial<Record<HomeTourStepId, number>>>({});
   const formatMinutes = (value: number) => {
     if (!Number.isFinite(value)) return '0';
     if (Number.isInteger(value)) return String(value);
@@ -75,6 +86,131 @@ export default function HomeScreen() {
   const infiniteCycles = cycles.filter((cycle) => cycle.id === 'infinite' || cycle.type === 'infinite');
   const fixedCycles = cycles.filter((cycle) => cycle.id !== 'infinite' && cycle.type !== 'infinite');
   const primaryCycle = fixedCycles.length > 0 ? fixedCycles[0] : cycles[0]; // Hero prefers fixed cycle
+  const homeTourSteps = useMemo(() => {
+    return [
+      {
+        id: 'settings' as const,
+        title: 'Comece pelas configuracoes',
+        body: 'Aqui voce ajusta ciclos, bloqueio de apps, foco total, temas e outros comportamentos centrais do VTX.',
+      },
+      primaryCycle
+        ? {
+            id: 'hero' as const,
+            title: 'Este e o atalho para iniciar rapido',
+            body: 'O card principal sempre destaca sua proxima sessao. Toque em "Iniciar agora" para cair direto no timer.',
+          }
+        : null,
+      {
+        id: 'goal' as const,
+        title: 'Sua meta diaria mora aqui',
+        body: 'Esta barra mostra quanto voce ja focou hoje e quanto falta para bater sua meta. Ela ajuda a manter consistencia.',
+      },
+      infiniteCycles.length > 0
+        ? {
+            id: 'infinite' as const,
+            title: 'Use o modo infinito para foco livre',
+            body: 'Esses atalhos servem para sessoes mais flexiveis, quando voce nao quer um ciclo fechado e prefere controlar o ritmo manualmente.',
+          }
+        : null,
+      {
+        id: 'create' as const,
+        title: 'Crie seus proprios ciclos',
+        body: 'Quando quiser personalizar foco, recompensa e pausa, este botao te leva para montar novos formatos de sessao.',
+      },
+    ].filter(Boolean) as { id: HomeTourStepId; title: string; body: string }[];
+  }, [infiniteCycles.length, primaryCycle]);
+  const shouldShowFeatureTour =
+    hasCompletedOnboarding && !hasCompletedFeatureTour && homeTourSteps.length > 0;
+  const activeTourStep = shouldShowFeatureTour
+    ? homeTourSteps[Math.min(tourStepIndex, homeTourSteps.length - 1)]
+    : null;
+
+  useEffect(() => {
+    if (!shouldShowFeatureTour) return;
+    setTourStepIndex((current) => Math.min(current, homeTourSteps.length - 1));
+  }, [homeTourSteps.length, shouldShowFeatureTour]);
+
+  useEffect(() => {
+    if (!shouldShowFeatureTour || !activeTourStep) return;
+
+    if (activeTourStep.id === 'settings') {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+
+    const nextY = sectionLayouts[activeTourStep.id];
+    if (typeof nextY === 'number') {
+      scrollRef.current?.scrollTo({ y: Math.max(nextY - 24, 0), animated: true });
+    }
+  }, [activeTourStep, sectionLayouts, shouldShowFeatureTour]);
+
+  const trackSectionLayout = (key: HomeTourStepId) => (event: LayoutChangeEvent) => {
+    const nextY = event.nativeEvent.layout.y;
+    setSectionLayouts((current) => (current[key] === nextY ? current : { ...current, [key]: nextY }));
+  };
+
+  const isTourStepActive = (key: HomeTourStepId) => activeTourStep?.id === key;
+  const getTourSectionStyle = (key: HomeTourStepId) => [
+    shouldShowFeatureTour && activeTourStep && activeTourStep.id !== key ? styles.tourSectionMuted : null,
+    isTourStepActive(key) ? styles.tourSectionActive : null,
+  ];
+
+  const handleCompleteFeatureTour = async () => {
+    await completeFeatureTour();
+  };
+
+  const handleAdvanceTour = async () => {
+    if (!activeTourStep) return;
+
+    if (tourStepIndex >= homeTourSteps.length - 1) {
+      await handleCompleteFeatureTour();
+      return;
+    }
+
+    setTourStepIndex((current) => current + 1);
+  };
+
+  const renderTourCallout = (key: HomeTourStepId) => {
+    if (!isTourStepActive(key) || !activeTourStep) return null;
+
+    const isLastStep = tourStepIndex === homeTourSteps.length - 1;
+
+    return (
+      <View style={styles.tourCallout}>
+        <View style={styles.tourBadge}>
+          <Text style={styles.tourBadgeText}>
+            GUIA DA HOME {tourStepIndex + 1}/{homeTourSteps.length}
+          </Text>
+        </View>
+        <Text style={styles.tourCalloutTitle}>{activeTourStep.title}</Text>
+        <Text style={styles.tourCalloutBody}>{activeTourStep.body}</Text>
+        <View style={styles.tourCalloutActions}>
+          <PressableScale
+            style={styles.tourSecondaryAction}
+            onPress={() => {
+              if (tourStepIndex === 0) {
+                void handleCompleteFeatureTour();
+                return;
+              }
+              setTourStepIndex((current) => Math.max(current - 1, 0));
+            }}
+          >
+            <Text style={styles.tourSecondaryActionText}>
+              {tourStepIndex === 0 ? 'Pular tour' : 'Voltar'}
+            </Text>
+          </PressableScale>
+          <PressableScale
+            style={styles.tourPrimaryAction}
+            onPress={() => {
+              void handleAdvanceTour();
+            }}
+          >
+            <Text style={styles.tourPrimaryActionText}>{isLastStep ? 'Concluir' : 'Proximo'}</Text>
+          </PressableScale>
+        </View>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -102,13 +238,17 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.headerRightGrid}>
-              <PressableScale onPress={() => router.push('/settings')} style={styles.iconButton}>
-                <Settings color={theme.colors.text} size={20} />
-              </PressableScale>
+              <View style={getTourSectionStyle('settings')}>
+                <PressableScale onPress={() => router.push('/settings')} style={styles.iconButton}>
+                  <Settings color={theme.colors.text} size={20} />
+                </PressableScale>
+              </View>
             </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {renderTourCallout('settings')}
+
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Resume Active Session Banner */}
           {activeCycleId && isActive && (
             <PressableScale
@@ -133,82 +273,91 @@ export default function HomeScreen() {
 
           {/* Hero */}
           {primaryCycle && (
-            <View style={styles.heroCard}>
-              <View style={styles.heroTop}>
-                <View>
-                  <View style={styles.heroBadge}>
-                    <Sparkles color={theme.colors.accent} size={14} />
-                    <Text style={styles.heroBadgeText}>PRÓXIMA SESSÃO</Text>
+            <View onLayout={trackSectionLayout('hero')} style={getTourSectionStyle('hero')}>
+              <View style={styles.heroCard}>
+                <View style={styles.heroTop}>
+                  <View>
+                    <View style={styles.heroBadge}>
+                      <Sparkles color={theme.colors.accent} size={14} />
+                      <Text style={styles.heroBadgeText}>PRÓXIMA SESSÃO</Text>
+                    </View>
+                    <Text style={styles.heroTitle}>{primaryCycle.label}</Text>
+                    <Text style={styles.heroSubtitle}>
+                      {primaryCycle.focusDuration} min foco • {primaryCycle.rewardDuration} min recompensa
+                    </Text>
                   </View>
-                  <Text style={styles.heroTitle}>{primaryCycle.label}</Text>
-                  <Text style={styles.heroSubtitle}>
-                    {primaryCycle.focusDuration} min foco • {primaryCycle.rewardDuration} min recompensa
-                  </Text>
+                  <View style={[styles.heroAccent, { backgroundColor: primaryCycle.color }]} />
                 </View>
-                <View style={[styles.heroAccent, { backgroundColor: primaryCycle.color }]} />
+                <PressableScale style={[styles.heroButton, { backgroundColor: primaryCycle.color }]} onPress={() => handleSelectCycle(primaryCycle)}>
+                  <Play size={22} color="#000" fill="#000" />
+                  <Text style={styles.heroButtonText}>Iniciar agora</Text>
+                </PressableScale>
               </View>
-              <PressableScale style={[styles.heroButton, { backgroundColor: primaryCycle.color }]} onPress={() => handleSelectCycle(primaryCycle)}>
-                <Play size={22} color="#000" fill="#000" />
-                <Text style={styles.heroButtonText}>Iniciar agora</Text>
-              </PressableScale>
+              {renderTourCallout('hero')}
             </View>
           )}
 
           {/* Daily Goal */}
-          <View style={styles.goalCard}>
-            <View style={styles.goalHeader}>
-              <View style={styles.goalTitleWrap}>
-                <BarChart3 color={theme.colors.accent} size={16} />
-                <Text style={styles.goalTitle}>Meta do dia</Text>
+          <View onLayout={trackSectionLayout('goal')} style={getTourSectionStyle('goal')}>
+            <View style={styles.goalCard}>
+              <View style={styles.goalHeader}>
+                <View style={styles.goalTitleWrap}>
+                  <BarChart3 color={theme.colors.accent} size={16} />
+                  <Text style={styles.goalTitle}>Meta do dia</Text>
+                </View>
+                <Text style={styles.goalValue}>{formatMinutes(dailyFocusMinutes)} / {formatMinutes(dailyGoalMinutes)} min</Text>
               </View>
-              <Text style={styles.goalValue}>{formatMinutes(dailyFocusMinutes)} / {formatMinutes(dailyGoalMinutes)} min</Text>
+              <View style={styles.goalBar}>
+                <View style={[styles.goalFill, { width: `${dailyProgress * 100}%` }]} />
+              </View>
+              <Text style={styles.goalHint}>
+                {dailyFocusMinutes >= dailyGoalMinutes
+                  ? 'Meta concluída! 🔥'
+                  : `Faltam ${formatMinutes(Math.max(dailyGoalMinutes - dailyFocusMinutes, 0))} min para bater a meta.`}
+              </Text>
             </View>
-            <View style={styles.goalBar}>
-              <View style={[styles.goalFill, { width: `${dailyProgress * 100}%` }]} />
-            </View>
-            <Text style={styles.goalHint}>
-              {dailyFocusMinutes >= dailyGoalMinutes
-                ? 'Meta concluída! 🔥'
-                : `Faltam ${formatMinutes(Math.max(dailyGoalMinutes - dailyFocusMinutes, 0))} min para bater a meta.`}
-            </Text>
+            {renderTourCallout('goal')}
           </View>
 
           {/* Infinite Cycles Carousel */}
-          <View style={styles.quickActions}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carouselContent}>
-              {infiniteCycles.map((cycle) => (
-                <PressableScale
-                  key={cycle.id}
-                  style={[styles.quickCard, styles.infiniteQuickCard, { width: 300, marginRight: 12 }]}
-                  onPress={() => handleSelectCycle(cycle)}
-                >
-                  <View style={styles.infiniteContent}>
-                    <View style={styles.lottieWrap}>
-                      {cycle.id === 'infinite' ? (
-                        <LottieView
-                          source={{ uri: 'https://lottie.host/945575cf-3408-4525-915e-d9587010dda1/T6PV3zCNW5.lottie' }}
-                          autoPlay
-                          loop
-                          style={styles.lottieIcon}
-                        />
-                      ) : (
-                        <View style={[styles.customIconPlaceholder, { backgroundColor: cycle.color }]}>
-                           <RotateCcw color="#000" size={32} />
-                        </View>
-                      )}
+          <View onLayout={trackSectionLayout('infinite')} style={getTourSectionStyle('infinite')}>
+            <View style={styles.quickActions}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carouselContent}>
+                {infiniteCycles.map((cycle) => (
+                  <PressableScale
+                    key={cycle.id}
+                    style={[styles.quickCard, styles.infiniteQuickCard, { width: 300, marginRight: 12 }]}
+                    onPress={() => handleSelectCycle(cycle)}
+                  >
+                    <View style={styles.infiniteContent}>
+                      <View style={styles.lottieWrap}>
+                        {cycle.id === 'infinite' ? (
+                          <LottieView
+                            source={{ uri: 'https://lottie.host/945575cf-3408-4525-915e-d9587010dda1/T6PV3zCNW5.lottie' }}
+                            autoPlay
+                            loop
+                            style={styles.lottieIcon}
+                          />
+                        ) : (
+                          <View style={[styles.customIconPlaceholder, { backgroundColor: cycle.color }]}> 
+                             <RotateCcw color="#000" size={32} />
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.infiniteText}>
+                        <Text style={styles.quickTitle} numberOfLines={1}>{cycle.label}</Text>
+                        <Text style={styles.quickSubtitle} numberOfLines={2}>
+                          {cycle.id === 'infinite' 
+                            ? 'Voce decide quando alternar.'
+                            : `Foco: ${cycle.focusDuration}m • Rec: ${cycle.rewardDuration}m`}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.infiniteText}>
-                      <Text style={styles.quickTitle} numberOfLines={1}>{cycle.label}</Text>
-                      <Text style={styles.quickSubtitle} numberOfLines={2}>
-                        {cycle.id === 'infinite' 
-                          ? 'Voce decide quando alternar.'
-                          : `Foco: ${cycle.focusDuration}m • Rec: ${cycle.rewardDuration}m`}
-                      </Text>
-                    </View>
-                  </View>
-                </PressableScale>
-              ))}
-            </ScrollView>
+                  </PressableScale>
+                ))}
+              </ScrollView>
+            </View>
+            {renderTourCallout('infinite')}
           </View>
 
           {/* Fixed Cycles List */}
@@ -223,10 +372,13 @@ export default function HomeScreen() {
           ))}
 
           {/* New Cycle Button */}
-          <PressableScale onPress={handleCreateCycle} style={styles.newCycleButton}>
-            <Plus color="#F9D547" size={22} />
-            <Text style={styles.newCycleText}>CRIAR NOVO CICLO</Text>
-          </PressableScale>
+          <View onLayout={trackSectionLayout('create')} style={getTourSectionStyle('create')}>
+            <PressableScale onPress={handleCreateCycle} style={styles.newCycleButton}>
+              <Plus color="#F9D547" size={22} />
+              <Text style={styles.newCycleText}>CRIAR NOVO CICLO</Text>
+            </PressableScale>
+            {renderTourCallout('create')}
+          </View>
 
         </ScrollView>
       </View>
@@ -582,5 +734,89 @@ const createStyles = (theme: Theme) => StyleSheet.create({
       fontWeight: 'bold',
       fontSize: 14,
       letterSpacing: 1,
+  },
+  tourSectionMuted: {
+    opacity: 0.42,
+  },
+  tourSectionActive: {
+    marginHorizontal: -6,
+    padding: 6,
+    borderRadius: theme.radius.xl,
+    backgroundColor: 'rgba(231, 184, 74, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(231, 184, 74, 0.38)',
+  },
+  tourCallout: {
+    marginTop: 12,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
+    shadowColor: theme.colors.accent,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 7,
+  },
+  tourBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(231, 184, 74, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(231, 184, 74, 0.34)',
+    marginBottom: 10,
+  },
+  tourBadgeText: {
+    color: theme.colors.accent,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+  },
+  tourCalloutTitle: {
+    color: theme.colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  tourCalloutBody: {
+    color: theme.colors.textMuted,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 8,
+  },
+  tourCalloutActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  tourPrimaryAction: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.accent,
+  },
+  tourPrimaryActionText: {
+    color: theme.colors.accentDark,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  tourSecondaryAction: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.surfaceSoft,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  tourSecondaryActionText: {
+    color: theme.colors.text,
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

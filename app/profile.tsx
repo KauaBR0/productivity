@@ -342,7 +342,7 @@ export default function ProfileScreen() {
       });
       const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.kauaan.productivy';
       const message =
-        `Estou usando o Productivy para focar melhor.\n` +
+        `Estou usando o VTX para focar melhor.\n` +
         `Use meu codigo ${referralSummary.referralCode} no cadastro e ganhe moedas ao concluir seu primeiro ciclo.\n\n` +
         `Abrir app: ${deepLink}\n` +
         `Play Store: ${playStoreUrl}`;

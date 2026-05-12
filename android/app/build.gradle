@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.kauaan.productivyapp'
+    namespace 'com.kauaan.productivy'
     defaultConfig {
-        applicationId 'com.kauaan.productivyapp'
+        applicationId 'com.kauaan.productivy'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
