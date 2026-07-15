@@ -64,24 +64,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        setUser(mapSupabaseUser(session.user));
-        void ensureProfileRow(session.user);
-      } else {
-        setUser(null);
-      }
-      setIsLoading(false);
-    });
-
-    // 2. Listen for auth changes
+    // onAuthStateChange emits INITIAL_SESSION after Supabase restores storage.
+    // Keeping a separate getSession request here creates two competing sources:
+    // a delayed initial null session can overwrite a newer SIGNED_IN event.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session?.user) {
         setUser(mapSupabaseUser(session.user));
-        void ensureProfileRow(session.user);
+        void ensureProfileRow(session.user).catch((error) => {
+          console.warn('Failed to ensure profile row:', error);
+        });
       } else {
         setUser(null);
       }
